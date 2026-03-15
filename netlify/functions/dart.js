@@ -78,7 +78,9 @@ exports.handler = async (event) => {
       if (!query) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: "corp_name 필요" }) };
 
       const name = encodeURIComponent(query);
-      const url  = `https://opendart.fss.or.kr/api/list.json?crtfc_key=${KEY}&corp_name=${name}&last_reprt_at=Y&page_count=20`;
+     const bgn = new Date(); bgn.setFullYear(bgn.getFullYear() - 1);
+const bgnStr = bgn.toISOString().slice(0,10).replace(/-/g,"");
+const url  = `https://opendart.fss.or.kr/api/list.json?crtfc_key=${KEY}&corp_name=${name}&bgn_de=${bgnStr}&page_count=20`;
       const data = await fetchJson(url);
 
       const statusMsg = {
