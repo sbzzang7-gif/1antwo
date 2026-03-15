@@ -31,9 +31,11 @@
   @keyframes spin { to { transform: rotate(360deg); } }
 
   .tabs { background:#111827; border-bottom:1px solid #1e293b; padding:0 32px; display:flex; gap:0; }
-  .tab-btn { background:transparent; border:none; border-bottom:2px solid transparent; color:#64748b; padding:14px 24px; font-size:14px; cursor:pointer; display:flex; align-items:center; gap:8px; font-family:inherit; transition:all 0.2s; }
+  .tab-btn { background:transparent; border:none; border-bottom:2px solid transparent; color:#64748b; padding:14px 24px; font-size:14px; cursor:pointer; display:flex; align-items:center; gap:8px; font-family:inherit; transition:all 0.2s; position:relative; }
   .tab-btn:hover { color:#94a3b8; }
   .tab-btn.active { color:#e2e8f0; border-bottom-color:#3b82f6; font-weight:600; }
+  .new-dot { display:none; width:8px; height:8px; background:#ef4444; border-radius:50%; box-shadow:0 0 6px #ef4444; flex-shrink:0; animation:pulse 2s infinite; }
+  .new-dot.show { display:inline-block; }
 
   .content { padding:24px 32px; max-width:1400px; margin:0 auto; }
   .tab-content { display:none; animation:fadeIn 0.3s ease-out; }
@@ -142,9 +144,10 @@
 <!-- Tabs -->
 <div class="tabs">
   <button class="tab-btn active" data-tab="portfolio" onclick="switchTab('portfolio')">📊 포트폴리오</button>
-  <button class="tab-btn" data-tab="analysis" onclick="switchTab('analysis')">🔍 기업분석</button>
-  <button class="tab-btn" data-tab="presentations" onclick="switchTab('presentations')">📁 발표자료</button>
-  <button class="tab-btn" data-tab="notice" onclick="switchTab('notice')">📢 공지사항</button>
+  <button class="tab-btn" data-tab="analysis" onclick="switchTab('analysis')">🔍 기업분석<span class="new-dot" id="badge-analysis"></span></button>
+  <button class="tab-btn" data-tab="presentations" onclick="switchTab('presentations')">📁 발표자료<span class="new-dot" id="badge-presentations"></span></button>
+  <button class="tab-btn" data-tab="notice" onclick="switchTab('notice')">📢 공지사항<span class="new-dot" id="badge-notice"></span></button>
+  <button class="tab-btn" data-tab="board" onclick="switchTab('board')">💬 자유게시판<span class="new-dot" id="badge-board"></span></button>
 </div>
 
 <!-- Content -->
@@ -241,6 +244,33 @@
     </div>
   </div>
 
+  <!-- ═══ Board Tab ═══ -->
+  <div class="tab-content" id="tab-board">
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-title">자유게시판 <span id="boardCount" style="color:#64748b;font-weight:400"></span></div>
+        <button class="btn btn-primary" style="padding:8px 14px;font-size:12px" onclick="toggleBoardForm()">✏️ 글쓰기</button>
+      </div>
+      <div id="boardForm" style="display:none;margin-bottom:16px;padding:16px;background:#0a0e17;border-radius:8px">
+        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <input class="form-input" id="bd-author" placeholder="작성자 *" style="width:140px">
+          <input class="form-input" id="bd-title"  placeholder="제목 *" style="flex:1;min-width:200px">
+        </div>
+        <textarea id="bd-content" placeholder="내용을 입력하세요..." style="width:100%;height:120px;padding:10px 12px;border-radius:6px;border:1px solid #1e293b;background:#111827;color:#e2e8f0;font-size:13px;font-family:inherit;outline:none;resize:vertical;display:block;margin-bottom:8px"></textarea>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-success" style="padding:7px 20px;font-size:13px" onclick="submitBoardPost()">등록</button>
+          <label class="btn btn-ghost" style="padding:7px 14px;font-size:13px;cursor:pointer">
+            <span id="bdFileText">📎 파일 첨부</span>
+            <input type="file" id="bdFileInput" multiple accept=".pdf,.md,.docx,.doc,.pptx,.xlsx,.png,.jpg,.jpeg" style="display:none" onchange="previewBoardFiles()">
+          </label>
+          <button class="btn btn-ghost" style="padding:7px 14px;font-size:13px" onclick="toggleBoardForm()">취소</button>
+        </div>
+        <div id="bdFilePreview" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
+      <div id="boardList"><div class="empty">등록된 게시물이 없습니다.</div></div>
+    </div>
+  </div>
+
   <!-- ═══ Analysis Tab ═══ -->
   <div class="tab-content" id="tab-analysis">
     <div class="table-card" style="margin-bottom:20px">
@@ -292,6 +322,9 @@ let reports = {}; // { 기업명: [ { id, name, url, uploadedAt } ] }
 let reportComments = {}; // { reportId: [ { id, author, content, createdAt } ] }
 let presentations = []; // [ { id, name, url, uploadedAt, type } ]
 let announcements = []; // [ { id, author, title, content, createdAt } ]
+let boardPosts = []; // [ { id, author, title, content, createdAt, files:[{id,name,url,type,uploadedAt}] } ]
+let annualData = {}; // { 기업명: [{ id, year, revenue, opProfit, netProfit }] } max 5
+let quarterlyData = {}; // { 기업명: [{ id, quarter, revenue, opProfit, netProfit }] } max 8
 let selectedCompany = null;
 let charts = {};
 let isRemoteUpdate = false; // Firebase에서 받은 업데이트 중 재저장 방지
@@ -320,11 +353,40 @@ function makeBadge(text, color) {
 }
 
 // ─── Firebase 저장 ───
+// ─── 새 콘텐츠 뱃지 (36시간) ───
+function updateNewBadges() {
+  const LIMIT = 36 * 60 * 60 * 1000;
+  const now   = Date.now();
+  const isNew = t => t && (now - t) < LIMIT;
+
+  // 기업분석: 글 / 파일 / 애널리스트 리포트
+  const analysisNew =
+    Object.values(companyNotes).flat().some(n => isNew(n.createdAt)) ||
+    Object.values(companyDocs).flat().some(d => isNew(d.uploadedAt)) ||
+    Object.values(reports).flat().some(r => isNew(r.uploadedAt));
+
+  // 발표자료
+  const presNew = presentations.some(p => isNew(p.uploadedAt));
+
+  // 공지사항
+  const noticeNew = announcements.some(a => isNew(a.createdAt));
+
+  // 자유게시판
+  const boardNew = boardPosts.some(p => isNew(p.createdAt));
+
+  const map = { analysis: analysisNew, presentations: presNew, notice: noticeNew, board: boardNew };
+  Object.entries(map).forEach(([tab, hasNew]) => {
+    const el = document.getElementById("badge-" + tab);
+    if (el) el.classList.toggle("show", hasNew);
+  });
+}
+
 function saveToFirebase() {
   if (isRemoteUpdate) return;
-  const data = { portfolio, returnsData, financials, companyDocs, companyNotes, reports, reportComments, presentations, announcements, updatedAt: Date.now() };
+  const data = { portfolio, returnsData, financials, companyDocs, companyNotes, reports, reportComments, presentations, announcements, boardPosts, annualData, quarterlyData, updatedAt: Date.now() };
   dbRef.set(data);
   showSaveStatus();
+  updateNewBadges();
 }
 
 function showSaveStatus() {
@@ -352,6 +414,9 @@ dbRef.on("value", (snapshot) => {
   companyDocs = data.companyDocs || {};
   companyNotes = data.companyNotes || {};
   reports = data.reports || {};
+  boardPosts = data.boardPosts || [];
+  annualData = data.annualData || {};
+  quarterlyData = data.quarterlyData || {};
   reportComments = data.reportComments || {};
   presentations = data.presentations || [];
   announcements = data.announcements || [];
@@ -362,6 +427,8 @@ dbRef.on("value", (snapshot) => {
   renderPortfolio();
   renderReturnDataList();
   renderNotices();
+  renderBoard();
+  updateNewBadges();
 
   if (firstLoad) {
     document.getElementById("syncOverlay").style.display = "none";
@@ -432,6 +499,7 @@ function switchTab(id) {
   if (id === "analysis") renderAnalysis();
   if (id === "presentations") renderPresentations();
   if (id === "notice") renderNotices();
+  if (id === "board") renderBoard();
 }
 
 // ─── Portfolio ───
@@ -656,6 +724,155 @@ function renderPortfolio() {
   renderPortfolioTable();
   renderReturnsChart();
   renderSectorChart();
+}
+
+// ─── 자유게시판 ───
+let boardFormOpen = false;
+let boardFileQueue = []; // 첨부 대기 파일
+
+function toggleBoardForm() {
+  boardFormOpen = !boardFormOpen;
+  document.getElementById("boardForm").style.display = boardFormOpen ? "block" : "none";
+  if (!boardFormOpen) {
+    document.getElementById("bd-author").value = "";
+    document.getElementById("bd-title").value  = "";
+    document.getElementById("bd-content").value = "";
+    document.getElementById("bdFileText").textContent = "📎 파일 첨부";
+    document.getElementById("bdFilePreview").innerHTML = "";
+    document.getElementById("bdFileInput").value = "";
+    boardFileQueue = [];
+  }
+}
+
+function previewBoardFiles() {
+  const input = document.getElementById("bdFileInput");
+  boardFileQueue = Array.from(input.files);
+  const preview = document.getElementById("bdFilePreview");
+  const count = boardFileQueue.length;
+  document.getElementById("bdFileText").textContent = count > 0 ? `📎 ${count}개 선택됨` : "📎 파일 첨부";
+  preview.innerHTML = boardFileQueue.map((f, i) =>
+    `<span style="font-size:11px;padding:3px 10px;background:#1e293b;border-radius:20px;color:#94a3b8;display:flex;align-items:center;gap:5px">
+      ${f.name}
+      <button onclick="removeBoardFileQueue(${i})" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:12px;padding:0;line-height:1">✕</button>
+    </span>`
+  ).join("");
+}
+
+function removeBoardFileQueue(idx) {
+  boardFileQueue.splice(idx, 1);
+  const dt = new DataTransfer();
+  boardFileQueue.forEach(f => dt.items.add(f));
+  document.getElementById("bdFileInput").files = dt.files;
+  previewBoardFiles();
+}
+
+async function submitBoardPost() {
+  const author  = document.getElementById("bd-author").value.trim();
+  const title   = document.getElementById("bd-title").value.trim();
+  const content = document.getElementById("bd-content").value.trim();
+  if (!author) return alert("작성자를 입력해주세요.");
+  if (!title)  return alert("제목을 입력해주세요.");
+
+  const postId = Date.now().toString();
+  const uploadedFiles = [];
+
+  // 파일 업로드 처리
+  for (const file of boardFileQueue) {
+    try {
+      const ext  = file.name.split(".").pop().toLowerCase();
+      const fid  = Date.now().toString() + "_" + Math.random().toString(36).slice(2,6);
+      const ref  = storage.ref(`boardFiles/${postId}/${fid}/${file.name}`);
+      const snap = await ref.put(file);
+      const url  = await snap.ref.getDownloadURL();
+      uploadedFiles.push({ id: fid, name: file.name, url, type: ext, uploadedAt: Date.now() });
+    } catch(e) {
+      console.error("파일 업로드 실패:", e);
+      alert(`"${file.name}" 업로드 실패: ` + e.message);
+    }
+  }
+
+  boardPosts.unshift({ id: postId, author, title, content, createdAt: Date.now(), files: uploadedFiles });
+  toggleBoardForm();
+  saveToFirebase();
+  renderBoard();
+}
+
+function deleteBoardPost(postId) {
+  if (!confirm("이 게시물을 삭제하시겠습니까?")) return;
+  boardPosts = boardPosts.filter(p => p.id !== postId);
+  saveToFirebase();
+  renderBoard();
+}
+
+async function deleteBoardFile(postId, fileId, fileUrl) {
+  if (!confirm("이 파일을 삭제하시겠습니까?")) return;
+  try { await storage.refFromURL(fileUrl).delete(); } catch(e) {}
+  const post = boardPosts.find(p => p.id === postId);
+  if (post) post.files = (post.files || []).filter(f => f.id !== fileId);
+  saveToFirebase();
+  renderBoard();
+}
+
+function toggleBoardBody(postId) {
+  const body = document.getElementById("bd-body-" + postId);
+  const btn  = document.getElementById("bd-toggle-" + postId);
+  if (!body) return;
+  const isOpen = body.style.display !== "none";
+  body.style.display = isOpen ? "none" : "block";
+  btn.textContent = isOpen ? "더보기 ▼" : "접기 ▲";
+}
+
+function renderBoard() {
+  const list = document.getElementById("boardList");
+  if (!list) return;
+  const count = document.getElementById("boardCount");
+  if (count) count.textContent = `(${boardPosts.length}건)`;
+  if (boardPosts.length === 0) {
+    list.innerHTML = '<div class="empty">등록된 게시물이 없습니다.</div>';
+    return;
+  }
+  const docIcon = { pdf:"📄", md:"📝", docx:"📃", doc:"📃", pptx:"📑", xlsx:"📊", png:"🖼", jpg:"🖼", jpeg:"🖼" };
+  list.innerHTML = boardPosts.map(p => {
+    const date    = new Date(p.createdAt).toLocaleDateString("ko-KR", {year:"numeric",month:"long",day:"numeric"});
+    const time    = new Date(p.createdAt).toLocaleTimeString("ko-KR", {hour:"2-digit",minute:"2-digit"});
+    const escaped = (p.content||"").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
+    const files   = p.files || [];
+    const filesHtml = files.length === 0 ? "" : `
+      <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px">
+        ${files.map(f => {
+          const icon = docIcon[f.type] || "📄";
+          return `<div style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:#111827;border:1px solid #1e293b;border-radius:8px">
+            <span>${icon}</span>
+            <span style="font-size:12px;color:#94a3b8">${f.name}</span>
+            <button class="btn btn-primary" style="padding:3px 10px;font-size:11px" onclick="window.open('${f.url}','_blank')">보기</button>
+            <button class="btn btn-ghost" style="padding:3px 8px;font-size:11px;color:#ef4444;border-color:#ef444444" onclick="deleteBoardFile('${p.id}','${f.id}','${f.url}')">삭제</button>
+          </div>`;
+        }).join("")}
+      </div>`;
+    const LIMIT = 36 * 60 * 60 * 1000;
+    const isNew = (Date.now() - p.createdAt) < LIMIT;
+    return `
+      <div style="padding:14px 0;border-bottom:1px solid #1e293b">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <span style="font-size:14px;font-weight:700">${p.title}</span>
+              ${isNew ? '<span style="font-size:10px;font-weight:700;color:#ef4444;background:#ef444418;border:1px solid #ef444444;padding:2px 7px;border-radius:20px">NEW</span>' : ''}
+              ${files.length > 0 ? `<span style="font-size:11px;color:#64748b">📎 ${files.length}</span>` : ''}
+            </div>
+            <div style="font-size:11px;color:#64748b">✍️ ${p.author} · ${date} ${time}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button id="bd-toggle-${p.id}" class="btn btn-ghost" style="padding:3px 9px;font-size:11px" onclick="toggleBoardBody('${p.id}')">더보기 ▼</button>
+            <button class="btn btn-ghost" style="padding:3px 9px;font-size:11px;color:#ef4444;border-color:#ef444444" onclick="deleteBoardPost('${p.id}')">삭제</button>
+          </div>
+        </div>
+        <div id="bd-body-${p.id}" style="display:none;margin-top:12px">
+          <div style="padding:12px;background:#0a0e17;border-radius:8px;font-size:13px;line-height:1.8;color:#94a3b8">${escaped}</div>
+          ${filesHtml}
+        </div>
+      </div>`;
+  }).join("");
 }
 
 // ─── 공지사항 ───
@@ -955,6 +1172,122 @@ function renderPresentations() {
   }).join("");
 }
 
+// ─── 연간/분기 실적 ───
+function toggleAnnualForm(company) {
+  const form = document.getElementById("annForm-" + company);
+  if (!form) return;
+  form.style.display = form.style.display === "none" ? "block" : "none";
+}
+function calcAnnMargin() {
+  const rev = parseFloat(document.getElementById("ann-rev")?.value) || 0;
+  const op  = parseFloat(document.getElementById("ann-op")?.value)  || 0;
+  const el  = document.getElementById("ann-margin-preview");
+  if (el) el.textContent = rev > 0 ? ((op/rev)*100).toFixed(1) + "%" : "-";
+}
+function addAnnualData(company) {
+  const year = document.getElementById("ann-year")?.value.trim();
+  const rev  = parseFloat(document.getElementById("ann-rev")?.value);
+  const op   = parseFloat(document.getElementById("ann-op")?.value);
+  const net  = parseFloat(document.getElementById("ann-net")?.value);
+  if (!year) return alert("연도를 입력해주세요.");
+  if (isNaN(rev) || isNaN(op) || isNaN(net)) return alert("모든 수치를 입력해주세요.");
+  if (!annualData[company]) annualData[company] = [];
+  const idx = annualData[company].findIndex(d => d.year === year);
+  if (idx >= 0) {
+    annualData[company][idx] = { ...annualData[company][idx], revenue: rev, opProfit: op, netProfit: net };
+  } else {
+    annualData[company].push({ id: Date.now().toString(), year, revenue: rev, opProfit: op, netProfit: net });
+    annualData[company].sort((a, b) => String(a.year).localeCompare(String(b.year)));
+    if (annualData[company].length > 5) annualData[company] = annualData[company].slice(-5);
+  }
+  saveToFirebase();
+  selectCompany(company);
+}
+function deleteAnnualData(company, id) {
+  if (!confirm("이 데이터를 삭제하시겠습니까?")) return;
+  annualData[company] = (annualData[company] || []).filter(d => d.id !== id);
+  saveToFirebase();
+  selectCompany(company);
+}
+
+function toggleQuarterlyForm(company) {
+  const form = document.getElementById("qtrForm-" + company);
+  if (!form) return;
+  form.style.display = form.style.display === "none" ? "block" : "none";
+}
+function calcQtrMargin() {
+  const rev = parseFloat(document.getElementById("qtr-rev")?.value) || 0;
+  const op  = parseFloat(document.getElementById("qtr-op")?.value)  || 0;
+  const el  = document.getElementById("qtr-margin-preview");
+  if (el) el.textContent = rev > 0 ? ((op/rev)*100).toFixed(1) + "%" : "-";
+}
+function addQuarterlyData(company) {
+  const quarter = document.getElementById("qtr-quarter")?.value.trim();
+  const rev     = parseFloat(document.getElementById("qtr-rev")?.value);
+  const op      = parseFloat(document.getElementById("qtr-op")?.value);
+  const net     = parseFloat(document.getElementById("qtr-net")?.value);
+  if (!quarter) return alert("분기를 입력해주세요. (예: 24Q1)");
+  if (isNaN(rev) || isNaN(op) || isNaN(net)) return alert("모든 수치를 입력해주세요.");
+  if (!quarterlyData[company]) quarterlyData[company] = [];
+  const idx = quarterlyData[company].findIndex(d => d.quarter === quarter);
+  if (idx >= 0) {
+    quarterlyData[company][idx] = { ...quarterlyData[company][idx], revenue: rev, opProfit: op, netProfit: net };
+  } else {
+    quarterlyData[company].push({ id: Date.now().toString(), quarter, revenue: rev, opProfit: op, netProfit: net });
+    if (quarterlyData[company].length > 8) quarterlyData[company] = quarterlyData[company].slice(-8);
+  }
+  saveToFirebase();
+  selectCompany(company);
+}
+function deleteQuarterlyData(company, id) {
+  if (!confirm("이 데이터를 삭제하시겠습니까?")) return;
+  quarterlyData[company] = (quarterlyData[company] || []).filter(d => d.id !== id);
+  saveToFirebase();
+  selectCompany(company);
+}
+
+function renderPerformanceChart(canvasId, chartKey, labels, revenues, opProfits, netProfits, margins) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  if (charts[chartKey]) { charts[chartKey].destroy(); delete charts[chartKey]; }
+  const allVals = revenues.concat(opProfits).concat(netProfits).filter(v => v > 0);
+  const maxVal = allVals.length ? Math.max(...allVals) : 1;
+  const fmtTick = v => {
+    if (maxVal >= 100000) return (v/10000).toFixed(1) + "조";
+    if (maxVal >= 10000)  return (v/1000).toFixed(0) + "천억";
+    return v.toLocaleString();
+  };
+  charts[chartKey] = new Chart(canvas.getContext("2d"), {
+    data: {
+      labels,
+      datasets: [
+        { type:"bar",  label:"매출액",      data:revenues,  backgroundColor:"rgba(59,130,246,0.55)",  borderColor:"#3b82f6", borderWidth:1, yAxisID:"y" },
+        { type:"bar",  label:"영업이익",    data:opProfits,  backgroundColor:"rgba(34,197,94,0.55)",   borderColor:"#22c55e", borderWidth:1, yAxisID:"y" },
+        { type:"bar",  label:"순이익",      data:netProfits, backgroundColor:"rgba(168,85,247,0.55)",  borderColor:"#a855f7", borderWidth:1, yAxisID:"y" },
+        { type:"line", label:"영업이익률(%)", data:margins, borderColor:"#f59e0b", backgroundColor:"rgba(245,158,11,0.1)",
+          borderWidth:2.5, pointRadius:5, pointBackgroundColor:"#f59e0b", tension:0.3, yAxisID:"y2", fill:false }
+      ]
+    },
+    options: {
+      responsive:true,
+      interaction:{ mode:"index", intersect:false },
+      plugins:{
+        legend:{ position:"bottom", labels:{ color:"#64748b", font:{ size:11 }, padding:14, boxWidth:12 } },
+        tooltip:{ callbacks:{ label: ctx =>
+          ctx.dataset.label === "영업이익률(%)"
+            ? "영업이익률: " + ctx.parsed.y.toFixed(1) + "%"
+            : ctx.dataset.label + ": " + fmtTick(ctx.parsed.y)
+        }}
+      },
+      scales:{
+        x:  { grid:{ color:"#1e293b" }, ticks:{ color:"#64748b", font:{ size:11 } } },
+        y:  { grid:{ color:"#1e293b" }, ticks:{ color:"#64748b", font:{ size:11 }, callback:fmtTick }, position:"left" },
+        y2: { grid:{ display:false  }, ticks:{ color:"#f59e0b", font:{ size:11 }, callback: v => v + "%" }, position:"right" }
+      }
+    }
+  });
+}
+
 // ─── Analysis ───
 let showCompanyForm = false;
 
@@ -1002,13 +1335,23 @@ function renderCompanyGrid(names) {
     grid.innerHTML = '<div style="color:#64748b;font-size:13px;padding:8px 0">등록된 기업이 없습니다.</div>';
     return;
   }
+  const LIMIT = 36 * 60 * 60 * 1000;
+  const now   = Date.now();
+  const isNew = t => t && (now - t) < LIMIT;
   grid.innerHTML = names.map(n => {
-    const docCount = (companyDocs[n] || []).length;
-    const reportCount = (reports[n] || []).length;
-    const isActive = n === selectedCompany;
+    const docCount    = (companyDocs[n]    || []).length;
+    const reportCount = (reports[n]        || []).length;
+    const isActive    = n === selectedCompany;
+    const hasNew =
+      (companyNotes[n] || []).some(x => isNew(x.createdAt))  ||
+      (companyDocs[n]  || []).some(x => isNew(x.uploadedAt)) ||
+      (reports[n]      || []).some(x => isNew(x.uploadedAt));
     return `
       <div class="company-card ${isActive ? 'active' : ''}" onclick="selectCompany('${n}')">
-        <div class="company-card-name">${n}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div class="company-card-name" style="margin-bottom:0">${n}</div>
+          ${hasNew ? `<span style="font-size:10px;font-weight:700;color:#ef4444;background:#ef444418;border:1px solid #ef444444;padding:2px 7px;border-radius:20px;animation:pulse 2s infinite">NEW</span>` : ''}
+        </div>
         <div class="company-card-meta">
           <span>📄 분석자료 ${docCount}건</span>
           <span>📊 리포트 ${reportCount}건</span>
@@ -1024,14 +1367,16 @@ function selectCompany(name) {
   if (!d) return;
 
   const companyReports = reports[name] || [];
-  const docs = companyDocs[name] || [];
-  const notes = companyNotes[name] || [];
+  const docs  = companyDocs[name] || [];
+  const notes = (companyNotes[name] || []).slice().sort((a,b) => a.createdAt - b.createdAt);
+  const annRecords = annualData[name]    || [];
+  const qtrRecords = quarterlyData[name] || [];
   const docIcon = { pdf:"📄", md:"📝", docx:"📃", doc:"📃" };
 
   // ── 글 목록 ──
   const notesHtml = notes.map(n => {
-    const date = new Date(n.createdAt).toLocaleDateString("ko-KR", {year:"numeric",month:"long",day:"numeric"});
-    const time = new Date(n.createdAt).toLocaleTimeString("ko-KR", {hour:"2-digit",minute:"2-digit"});
+    const date    = new Date(n.createdAt).toLocaleDateString("ko-KR", {year:"numeric",month:"long",day:"numeric"});
+    const time    = new Date(n.createdAt).toLocaleTimeString("ko-KR", {hour:"2-digit",minute:"2-digit"});
     const escaped = n.content.replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
     return `
       <div style="padding:12px 0;border-bottom:1px solid #1e293b">
@@ -1069,14 +1414,58 @@ function selectCompany(name) {
       </div>`;
   }).join("") || `<div style="padding:16px 0;color:#64748b;font-size:13px;text-align:center">업로드된 파일이 없습니다.</div>`;
 
+  // ── 연간 실적 테이블 ──
+  const annTableRows = annRecords.map(rec => {
+    const margin = rec.revenue > 0 ? ((rec.opProfit/rec.revenue)*100).toFixed(1) + "%" : "-";
+    const mColor = rec.opProfit >= 0 ? "#22c55e" : "#ef4444";
+    return `<tr>
+      <td style="font-weight:600">${rec.year}</td>
+      <td>${(rec.revenue||0).toLocaleString()}</td>
+      <td class="${rec.opProfit  >= 0 ? 'green':'red'}">${(rec.opProfit ||0).toLocaleString()}</td>
+      <td class="${rec.netProfit >= 0 ? 'green':'red'}">${(rec.netProfit||0).toLocaleString()}</td>
+      <td style="color:${mColor};font-weight:600">${margin}</td>
+      <td><button class="btn btn-ghost" style="padding:3px 9px;font-size:11px;color:#ef4444;border-color:#ef444444" onclick="deleteAnnualData('${name}','${rec.id}')">삭제</button></td>
+    </tr>`;
+  }).join("");
+
+  const annualBodyHtml = annRecords.length === 0
+    ? `<div style="padding:20px 0;color:#64748b;font-size:13px;text-align:center">입력된 연간 실적 데이터가 없습니다.</div>`
+    : `<canvas id="ann-chart-${name}" height="90" style="margin-bottom:16px"></canvas>
+       <div style="overflow-x:auto"><table>
+         <thead><tr><th>연도</th><th>매출액</th><th>영업이익</th><th>순이익</th><th>영업이익률</th><th></th></tr></thead>
+         <tbody>${annTableRows}</tbody>
+       </table></div>`;
+
+  // ── 분기 실적 테이블 ──
+  const qtrTableRows = qtrRecords.map(rec => {
+    const margin = rec.revenue > 0 ? ((rec.opProfit/rec.revenue)*100).toFixed(1) + "%" : "-";
+    const mColor = rec.opProfit >= 0 ? "#22c55e" : "#ef4444";
+    return `<tr>
+      <td style="font-weight:600">${rec.quarter}</td>
+      <td>${(rec.revenue||0).toLocaleString()}</td>
+      <td class="${rec.opProfit  >= 0 ? 'green':'red'}">${(rec.opProfit ||0).toLocaleString()}</td>
+      <td class="${rec.netProfit >= 0 ? 'green':'red'}">${(rec.netProfit||0).toLocaleString()}</td>
+      <td style="color:${mColor};font-weight:600">${margin}</td>
+      <td><button class="btn btn-ghost" style="padding:3px 9px;font-size:11px;color:#ef4444;border-color:#ef444444" onclick="deleteQuarterlyData('${name}','${rec.id}')">삭제</button></td>
+    </tr>`;
+  }).join("");
+
+  const quarterlyBodyHtml = qtrRecords.length === 0
+    ? `<div style="padding:20px 0;color:#64748b;font-size:13px;text-align:center">입력된 분기 실적 데이터가 없습니다.</div>`
+    : `<canvas id="qtr-chart-${name}" height="90" style="margin-bottom:16px"></canvas>
+       <div style="overflow-x:auto"><table>
+         <thead><tr><th>분기</th><th>매출액</th><th>영업이익</th><th>순이익</th><th>영업이익률</th><th></th></tr></thead>
+         <tbody>${qtrTableRows}</tbody>
+       </table></div>`;
+
   // ── 리포트 목록 (코멘트 포함) ──
   const reportsHtml = companyReports.length === 0
     ? `<div style="padding:20px 0;color:#64748b;font-size:13px;text-align:center">업로드된 리포트가 없습니다.</div>`
     : companyReports.map(r => {
         const comments = reportComments[r.id] || [];
         const commentsHtml = comments.map(c => {
-          const date = new Date(c.createdAt).toLocaleDateString("ko-KR", {year:"numeric",month:"long",day:"numeric"});
-          const time = new Date(c.createdAt).toLocaleTimeString("ko-KR", {hour:"2-digit",minute:"2-digit"});
+          const date    = new Date(c.createdAt).toLocaleDateString("ko-KR", {year:"numeric",month:"long",day:"numeric"});
+          const time    = new Date(c.createdAt).toLocaleTimeString("ko-KR", {hour:"2-digit",minute:"2-digit"});
           const escaped = c.content.replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
           return `
             <div style="padding:10px 0;border-bottom:1px solid #1e293b22">
@@ -1117,6 +1506,11 @@ function selectCompany(name) {
           </div>`;
       }).join("");
 
+  // ── 공통 입력 폼 스타일 ──
+  const formInputStyle = `padding:14px;background:#0a0e17;border-radius:8px;margin-bottom:12px`;
+  const inputRowStyle  = `display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px`;
+  const marginPreviewStyle = `display:flex;align-items:center;gap:6px;padding:7px 12px;background:#111827;border-radius:6px;border:1px solid #1e293b`;
+
   document.getElementById("analysisContent").innerHTML = `
     <div class="summary-card">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
@@ -1124,6 +1518,8 @@ function selectCompany(name) {
         <button class="btn btn-ghost" style="padding:5px 12px;font-size:11px;border-radius:6px;color:#ef4444;border-color:#ef444444" onclick="removeCompany('${name}')">🗑 기업 삭제</button>
       </div>
     </div>
+
+    <!-- ── 기업분석 자료 ── -->
     <div class="table-card" style="margin-bottom:16px">
       <div class="table-header">
         <div class="table-title">기업분석 자료 <span style="color:#64748b;font-weight:400">(글 ${notes.length} · 파일 ${docs.length})</span></div>
@@ -1138,18 +1534,20 @@ function selectCompany(name) {
       <div id="noteForm-${name}" style="display:none;padding:14px;background:#0a0e17;border-radius:8px;margin-bottom:12px">
         <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
           <input id="note-author-${name}" class="form-input" placeholder="작성자 *" style="width:130px">
-          <input id="note-title-${name}" class="form-input" placeholder="제목 *" style="flex:1;min-width:180px">
+          <input id="note-title-${name}"  class="form-input" placeholder="제목 *" style="flex:1;min-width:180px">
         </div>
         <textarea id="note-content-${name}" placeholder="내용을 입력하세요..." style="width:100%;height:100px;padding:10px 12px;border-radius:6px;border:1px solid #1e293b;background:#111827;color:#e2e8f0;font-size:13px;font-family:inherit;outline:none;resize:vertical;display:block;margin-bottom:8px"></textarea>
         <div style="display:flex;gap:8px">
           <button class="btn btn-success" style="padding:6px 18px;font-size:12px" onclick="submitCompanyNote('${name}')">등록</button>
-          <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="toggleCompanyNoteForm('${name}')">취소</button>
+          <button class="btn btn-ghost"   style="padding:6px 12px;font-size:12px" onclick="toggleCompanyNoteForm('${name}')">취소</button>
         </div>
       </div>
-      ${notesHtml}
-      ${docs.length > 0 ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #1e293b">${docsHtml}</div>` : docsHtml}
+      ${docsHtml}
+      ${notes.length > 0 ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #1e293b">${notesHtml}</div>` : notesHtml}
     </div>
-    <div class="table-card">
+
+    <!-- ── 애널리스트 리포트 ── -->
+    <div class="table-card" style="margin-bottom:16px">
       <div class="table-header">
         <div class="table-title">애널리스트 리포트 <span style="color:#64748b;font-weight:400">(${companyReports.length}건)</span></div>
         <label id="uploadReportBtn" class="btn btn-primary" style="padding:8px 14px;font-size:12px;cursor:pointer">
@@ -1159,7 +1557,79 @@ function selectCompany(name) {
       </div>
       ${reportsHtml}
     </div>
+
+    <!-- ── 최근 5개년 실적 ── -->
+    <div class="table-card" style="margin-bottom:16px">
+      <div class="table-header">
+        <div class="table-title">최근 5개년 실적 <span style="color:#64748b;font-weight:400">(단위: 억원)</span></div>
+        <button class="btn btn-ghost" style="padding:8px 14px;font-size:12px" onclick="toggleAnnualForm('${name}')">+ 데이터 추가</button>
+      </div>
+      <div id="annForm-${name}" style="display:none;${formInputStyle}">
+        <div style="${inputRowStyle}">
+          <input id="ann-year" class="form-input" placeholder="연도 (예: 2024)" style="width:160px">
+          <input id="ann-rev"  class="form-input" type="number" placeholder="매출액" style="width:130px" oninput="calcAnnMargin()">
+          <input id="ann-op"   class="form-input" type="number" placeholder="영업이익" style="width:130px" oninput="calcAnnMargin()">
+          <input id="ann-net"  class="form-input" type="number" placeholder="순이익" style="width:130px">
+          <div style="${marginPreviewStyle}">
+            <span style="font-size:12px;color:#64748b">영업이익률</span>
+            <span id="ann-margin-preview" style="font-size:13px;color:#f59e0b;font-weight:700;min-width:44px;text-align:right">-</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-success" style="padding:6px 18px;font-size:12px" onclick="addAnnualData('${name}')">추가</button>
+          <button class="btn btn-ghost"   style="padding:6px 12px;font-size:12px" onclick="toggleAnnualForm('${name}')">취소</button>
+        </div>
+      </div>
+      ${annualBodyHtml}
+    </div>
+
+    <!-- ── 최근 8개 분기 실적 ── -->
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-title">최근 8개 분기 실적 <span style="color:#64748b;font-weight:400">(단위: 억원)</span></div>
+        <button class="btn btn-ghost" style="padding:8px 14px;font-size:12px" onclick="toggleQuarterlyForm('${name}')">+ 데이터 추가</button>
+      </div>
+      <div id="qtrForm-${name}" style="display:none;${formInputStyle}">
+        <div style="${inputRowStyle}">
+          <input id="qtr-quarter" class="form-input" placeholder="분기 (예: 24Q1)" style="width:160px">
+          <input id="qtr-rev"     class="form-input" type="number" placeholder="매출액" style="width:130px" oninput="calcQtrMargin()">
+          <input id="qtr-op"      class="form-input" type="number" placeholder="영업이익" style="width:130px" oninput="calcQtrMargin()">
+          <input id="qtr-net"     class="form-input" type="number" placeholder="순이익" style="width:130px">
+          <div style="${marginPreviewStyle}">
+            <span style="font-size:12px;color:#64748b">영업이익률</span>
+            <span id="qtr-margin-preview" style="font-size:13px;color:#f59e0b;font-weight:700;min-width:44px;text-align:right">-</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-success" style="padding:6px 18px;font-size:12px" onclick="addQuarterlyData('${name}')">추가</button>
+          <button class="btn btn-ghost"   style="padding:6px 12px;font-size:12px" onclick="toggleQuarterlyForm('${name}')">취소</button>
+        </div>
+      </div>
+      ${quarterlyBodyHtml}
+    </div>
   `;
+
+  // ── 차트 렌더링 (DOM 세팅 후) ──
+  if (annRecords.length > 0) {
+    renderPerformanceChart(
+      "ann-chart-" + name, "annual_" + name,
+      annRecords.map(r => r.year),
+      annRecords.map(r => r.revenue  || 0),
+      annRecords.map(r => r.opProfit  || 0),
+      annRecords.map(r => r.netProfit || 0),
+      annRecords.map(r => r.revenue > 0 ? +((r.opProfit/r.revenue)*100).toFixed(2) : 0)
+    );
+  }
+  if (qtrRecords.length > 0) {
+    renderPerformanceChart(
+      "qtr-chart-" + name, "quarterly_" + name,
+      qtrRecords.map(r => r.quarter),
+      qtrRecords.map(r => r.revenue  || 0),
+      qtrRecords.map(r => r.opProfit  || 0),
+      qtrRecords.map(r => r.netProfit || 0),
+      qtrRecords.map(r => r.revenue > 0 ? +((r.opProfit/r.revenue)*100).toFixed(2) : 0)
+    );
+  }
 }
 
 function renderAnalysis() {
