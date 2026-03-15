@@ -287,7 +287,9 @@ let portfolio = [];
 let returnsData = { labels:[], data:[] };
 let financials = {};
 let companyDocs = {}; // { 기업명: [ { id, name, url, uploadedAt, type } ] }
+let companyNotes = {}; // { 기업명: [ { id, author, title, content, createdAt } ] }
 let reports = {}; // { 기업명: [ { id, name, url, uploadedAt } ] }
+let reportComments = {}; // { reportId: [ { id, author, content, createdAt } ] }
 let presentations = []; // [ { id, name, url, uploadedAt, type } ]
 let announcements = []; // [ { id, author, title, content, createdAt } ]
 let selectedCompany = null;
@@ -320,7 +322,7 @@ function makeBadge(text, color) {
 // ─── Firebase 저장 ───
 function saveToFirebase() {
   if (isRemoteUpdate) return;
-  const data = { portfolio, returnsData, financials, companyDocs, reports, presentations, announcements, updatedAt: Date.now() };
+  const data = { portfolio, returnsData, financials, companyDocs, companyNotes, reports, reportComments, presentations, announcements, updatedAt: Date.now() };
   dbRef.set(data);
   showSaveStatus();
 }
@@ -348,7 +350,9 @@ dbRef.on("value", (snapshot) => {
   returnsData = data.returnsData || { labels:[], data:[] };
   financials = data.financials || {};
   companyDocs = data.companyDocs || {};
+  companyNotes = data.companyNotes || {};
   reports = data.reports || {};
+  reportComments = data.reportComments || {};
   presentations = data.presentations || [];
   announcements = data.announcements || [];
   if (!selectedCompany || !financials[selectedCompany]) {
@@ -727,6 +731,67 @@ function renderNotices() {
   }).join("");
 }
 
+// ─── 기업분석 자료 글쓰기 ───
+function toggleCompanyNoteForm(company) {
+  const form = document.getElementById("noteForm-" + company);
+  if (!form) return;
+  form.style.display = form.style.display === "none" ? "block" : "none";
+}
+
+function submitCompanyNote(company) {
+  const author = document.getElementById("note-author-" + company)?.value.trim();
+  const title = document.getElementById("note-title-" + company)?.value.trim();
+  const content = document.getElementById("note-content-" + company)?.value.trim();
+  if (!author) return alert("작성자를 입력해주세요.");
+  if (!title) return alert("제목을 입력해주세요.");
+  if (!content) return alert("내용을 입력해주세요.");
+  if (!companyNotes[company]) companyNotes[company] = [];
+  companyNotes[company].unshift({ id: Date.now().toString(), author, title, content, createdAt: Date.now() });
+  saveToFirebase();
+  selectCompany(company);
+}
+
+function deleteCompanyNote(company, noteId) {
+  if (!confirm("이 글을 삭제하시겠습니까?")) return;
+  companyNotes[company] = (companyNotes[company] || []).filter(n => n.id !== noteId);
+  saveToFirebase();
+  selectCompany(company);
+}
+
+function toggleNoteBody(id) {
+  const el = document.getElementById("note-body-" + id);
+  const btn = document.getElementById("note-toggle-" + id);
+  if (!el || !btn) return;
+  const hidden = el.style.display === "none";
+  el.style.display = hidden ? "block" : "none";
+  btn.textContent = hidden ? "접기 ▲" : "더보기 ▼";
+}
+
+// ─── 애널리스트 리포트 코멘트 ───
+function toggleReportComments(reportId) {
+  const el = document.getElementById("rc-section-" + reportId);
+  if (!el) return;
+  el.style.display = el.style.display === "none" ? "block" : "none";
+}
+
+function submitReportComment(reportId, company) {
+  const author = document.getElementById("rc-author-" + reportId)?.value.trim();
+  const content = document.getElementById("rc-content-" + reportId)?.value.trim();
+  if (!author) return alert("작성자를 입력해주세요.");
+  if (!content) return alert("코멘트를 입력해주세요.");
+  if (!reportComments[reportId]) reportComments[reportId] = [];
+  reportComments[reportId].push({ id: Date.now().toString(), author, content, createdAt: Date.now() });
+  saveToFirebase();
+  selectCompany(company);
+}
+
+function deleteReportComment(reportId, commentId, company) {
+  if (!confirm("이 코멘트를 삭제하시겠습니까?")) return;
+  reportComments[reportId] = (reportComments[reportId] || []).filter(c => c.id !== commentId);
+  saveToFirebase();
+  selectCompany(company);
+}
+
 // ─── 기업분석 자료 업로드/삭제 ───
 async function uploadCompanyDoc(companyName, input) {
   const file = input.files[0];
@@ -957,42 +1022,101 @@ function selectCompany(name) {
   renderCompanyGrid();
   const d = financials[name];
   if (!d) return;
+
   const companyReports = reports[name] || [];
   const docs = companyDocs[name] || [];
+  const notes = companyNotes[name] || [];
   const docIcon = { pdf:"📄", md:"📝", docx:"📃", doc:"📃" };
-  const docsHtml = docs.length === 0
-    ? `<div style="padding:20px 0;color:#64748b;font-size:13px;text-align:center">업로드된 자료가 없습니다.</div>`
-    : docs.map(doc => {
-        const icon = docIcon[doc.type] || "📄";
-        const date = new Date(doc.uploadedAt).toLocaleDateString("ko-KR", {year:"numeric",month:"long",day:"numeric"});
-        return `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #1e293b">
-          <div style="display:flex;align-items:center;gap:10px">
-            <span style="font-size:20px">${icon}</span>
-            <div>
-              <div style="font-size:13px;font-weight:600">${doc.name}</div>
-              <div style="font-size:11px;color:#64748b;margin-top:2px">${date} · ${doc.type.toUpperCase()}</div>
-            </div>
+
+  // ── 글 목록 ──
+  const notesHtml = notes.map(n => {
+    const date = new Date(n.createdAt).toLocaleDateString("ko-KR", {year:"numeric",month:"long",day:"numeric"});
+    const time = new Date(n.createdAt).toLocaleTimeString("ko-KR", {hour:"2-digit",minute:"2-digit"});
+    const escaped = n.content.replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
+    return `
+      <div style="padding:12px 0;border-bottom:1px solid #1e293b">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div>
+            <div style="font-size:13px;font-weight:700;margin-bottom:3px">${n.title}</div>
+            <div style="font-size:11px;color:#64748b">✍️ ${n.author} · ${date} ${time}</div>
           </div>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-primary" style="padding:5px 14px;font-size:11px" onclick="window.open('${doc.url}','_blank')">보기</button>
-            <button class="btn btn-ghost" style="padding:5px 12px;font-size:11px;color:#ef4444;border-color:#ef444444" onclick="deleteCompanyDoc('${name}','${doc.id}','${doc.url}')">삭제</button>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button id="note-toggle-${n.id}" class="btn btn-ghost" style="padding:3px 9px;font-size:11px" onclick="toggleNoteBody('${n.id}')">더보기 ▼</button>
+            <button class="btn btn-ghost" style="padding:3px 9px;font-size:11px;color:#ef4444;border-color:#ef444444" onclick="deleteCompanyNote('${name}','${n.id}')">삭제</button>
           </div>
-        </div>`;
-      }).join("");
-  const reportsHtml = companyReports.length === 0
-    ? `<div style="padding:20px 0;color:#64748b;font-size:13px;text-align:center">업로드된 리포트가 없습니다.</div>`
-    : companyReports.map(r => `
+        </div>
+        <div id="note-body-${n.id}" style="display:none;margin-top:10px;padding:12px;background:#0a0e17;border-radius:8px;font-size:13px;line-height:1.8;color:#94a3b8">${escaped}</div>
+      </div>`;
+  }).join("") || `<div style="padding:16px 0;color:#64748b;font-size:13px;text-align:center">작성된 글이 없습니다.</div>`;
+
+  // ── 파일 목록 ──
+  const docsHtml = docs.map(doc => {
+    const icon = docIcon[doc.type] || "📄";
+    const date = new Date(doc.uploadedAt).toLocaleDateString("ko-KR", {year:"numeric",month:"long",day:"numeric"});
+    return `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #1e293b">
-        <div>
-          <div style="font-size:13px;font-weight:600">📄 ${r.name}</div>
-          <div style="font-size:11px;color:#64748b;margin-top:2px">${new Date(r.uploadedAt).toLocaleDateString('ko-KR', {year:'numeric',month:'long',day:'numeric'})}</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:20px">${icon}</span>
+          <div>
+            <div style="font-size:13px;font-weight:600">${doc.name}</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px">${date} · ${doc.type.toUpperCase()}</div>
+          </div>
         </div>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-primary" style="padding:5px 14px;font-size:11px" onclick="window.open('${r.url}','_blank')">보기</button>
-          <button class="btn btn-ghost" style="padding:5px 12px;font-size:11px;color:#ef4444;border-color:#ef444444" onclick="deleteReport('${name}','${r.id}','${r.url}')">삭제</button>
+          <button class="btn btn-primary" style="padding:5px 14px;font-size:11px" onclick="window.open('${doc.url}','_blank')">보기</button>
+          <button class="btn btn-ghost" style="padding:5px 12px;font-size:11px;color:#ef4444;border-color:#ef444444" onclick="deleteCompanyDoc('${name}','${doc.id}','${doc.url}')">삭제</button>
         </div>
-      </div>`).join("");
+      </div>`;
+  }).join("") || `<div style="padding:16px 0;color:#64748b;font-size:13px;text-align:center">업로드된 파일이 없습니다.</div>`;
+
+  // ── 리포트 목록 (코멘트 포함) ──
+  const reportsHtml = companyReports.length === 0
+    ? `<div style="padding:20px 0;color:#64748b;font-size:13px;text-align:center">업로드된 리포트가 없습니다.</div>`
+    : companyReports.map(r => {
+        const comments = reportComments[r.id] || [];
+        const commentsHtml = comments.map(c => {
+          const date = new Date(c.createdAt).toLocaleDateString("ko-KR", {year:"numeric",month:"long",day:"numeric"});
+          const time = new Date(c.createdAt).toLocaleTimeString("ko-KR", {hour:"2-digit",minute:"2-digit"});
+          const escaped = c.content.replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
+          return `
+            <div style="padding:10px 0;border-bottom:1px solid #1e293b22">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                <div>
+                  <div style="font-size:12px;color:#94a3b8;line-height:1.7">${escaped}</div>
+                  <div style="font-size:11px;color:#475569;margin-top:4px">✍️ ${c.author} · ${date} ${time}</div>
+                </div>
+                <button class="btn btn-ghost" style="padding:2px 8px;font-size:10px;color:#ef4444;border-color:#ef444433;flex-shrink:0;margin-left:8px" onclick="deleteReportComment('${r.id}','${c.id}','${name}')">삭제</button>
+              </div>
+            </div>`;
+        }).join("");
+        return `
+          <div style="padding:14px 0;border-bottom:1px solid #1e293b">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+              <div>
+                <div style="font-size:13px;font-weight:600">📄 ${r.name}</div>
+                <div style="font-size:11px;color:#64748b;margin-top:2px">${new Date(r.uploadedAt).toLocaleDateString("ko-KR",{year:"numeric",month:"long",day:"numeric"})}</div>
+              </div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <button class="btn btn-ghost" style="padding:5px 12px;font-size:11px;color:#94a3b8" onclick="toggleReportComments('${r.id}')">💬 코멘트 ${comments.length}</button>
+                <button class="btn btn-primary" style="padding:5px 14px;font-size:11px" onclick="window.open('${r.url}','_blank')">보기</button>
+                <button class="btn btn-ghost" style="padding:5px 12px;font-size:11px;color:#ef4444;border-color:#ef444444" onclick="deleteReport('${name}','${r.id}','${r.url}')">삭제</button>
+              </div>
+            </div>
+            <div id="rc-section-${r.id}" style="display:none;margin-top:12px;padding:14px;background:#0a0e17;border-radius:8px">
+              ${commentsHtml}
+              <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px">
+                <div style="display:flex;gap:6px">
+                  <input id="rc-author-${r.id}" class="form-input" placeholder="작성자 *" style="width:120px;font-size:12px">
+                </div>
+                <textarea id="rc-content-${r.id}" placeholder="코멘트를 입력하세요..." style="width:100%;height:72px;padding:8px 10px;border-radius:6px;border:1px solid #1e293b;background:#111827;color:#e2e8f0;font-size:12px;font-family:inherit;outline:none;resize:vertical"></textarea>
+                <div>
+                  <button class="btn btn-success" style="padding:5px 16px;font-size:12px" onclick="submitReportComment('${r.id}','${name}')">등록</button>
+                </div>
+              </div>
+            </div>
+          </div>`;
+      }).join("");
+
   document.getElementById("analysisContent").innerHTML = `
     <div class="summary-card">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
@@ -1002,13 +1126,28 @@ function selectCompany(name) {
     </div>
     <div class="table-card" style="margin-bottom:16px">
       <div class="table-header">
-        <div class="table-title">기업분석 자료 <span style="color:#64748b;font-weight:400">(${docs.length}건)</span></div>
-        <label id="uploadDocBtn" class="btn btn-primary" style="padding:8px 14px;font-size:12px;cursor:pointer">
-          <span id="uploadDocBtnText">+ 자료 업로드</span>
-          <input type="file" accept=".pdf,.md,.docx,.doc" style="display:none" onchange="uploadCompanyDoc('${name}', this)">
-        </label>
+        <div class="table-title">기업분석 자료 <span style="color:#64748b;font-weight:400">(글 ${notes.length} · 파일 ${docs.length})</span></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost" style="padding:8px 14px;font-size:12px" onclick="toggleCompanyNoteForm('${name}')">✏️ 글쓰기</button>
+          <label id="uploadDocBtn" class="btn btn-primary" style="padding:8px 14px;font-size:12px;cursor:pointer">
+            <span id="uploadDocBtnText">+ 파일 업로드</span>
+            <input type="file" accept=".pdf,.md,.docx,.doc" style="display:none" onchange="uploadCompanyDoc('${name}', this)">
+          </label>
+        </div>
       </div>
-      ${docsHtml}
+      <div id="noteForm-${name}" style="display:none;padding:14px;background:#0a0e17;border-radius:8px;margin-bottom:12px">
+        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <input id="note-author-${name}" class="form-input" placeholder="작성자 *" style="width:130px">
+          <input id="note-title-${name}" class="form-input" placeholder="제목 *" style="flex:1;min-width:180px">
+        </div>
+        <textarea id="note-content-${name}" placeholder="내용을 입력하세요..." style="width:100%;height:100px;padding:10px 12px;border-radius:6px;border:1px solid #1e293b;background:#111827;color:#e2e8f0;font-size:13px;font-family:inherit;outline:none;resize:vertical;display:block;margin-bottom:8px"></textarea>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-success" style="padding:6px 18px;font-size:12px" onclick="submitCompanyNote('${name}')">등록</button>
+          <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="toggleCompanyNoteForm('${name}')">취소</button>
+        </div>
+      </div>
+      ${notesHtml}
+      ${docs.length > 0 ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #1e293b">${docsHtml}</div>` : docsHtml}
     </div>
     <div class="table-card">
       <div class="table-header">
