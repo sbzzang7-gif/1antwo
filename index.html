@@ -323,6 +323,7 @@ let reportComments = {}; // { reportId: [ { id, author, content, createdAt } ] }
 let presentations = []; // [ { id, name, url, uploadedAt, type } ]
 let announcements = []; // [ { id, author, title, content, createdAt } ]
 let boardPosts = []; // [ { id, author, title, content, createdAt, files:[{id,name,url,type,uploadedAt}] } ]
+let dartCorpCodes = {}; // { 기업명: corp_code }
 let annualData = {}; // { 기업명: [{ id, year, revenue, opProfit, netProfit }] } max 5
 let quarterlyData = {}; // { 기업명: [{ id, quarter, revenue, opProfit, netProfit }] } max 8
 let selectedCompany = null;
@@ -383,7 +384,7 @@ function updateNewBadges() {
 
 function saveToFirebase() {
   if (isRemoteUpdate) return;
-  const data = { portfolio, returnsData, financials, companyDocs, companyNotes, reports, reportComments, presentations, announcements, boardPosts, annualData, quarterlyData, updatedAt: Date.now() };
+  const data = { portfolio, returnsData, financials, companyDocs, companyNotes, reports, reportComments, presentations, announcements, boardPosts, annualData, quarterlyData, dartCorpCodes, updatedAt: Date.now() };
   dbRef.set(data);
   showSaveStatus();
   updateNewBadges();
@@ -417,6 +418,7 @@ dbRef.on("value", (snapshot) => {
   boardPosts = data.boardPosts || [];
   annualData = data.annualData || {};
   quarterlyData = data.quarterlyData || {};
+  dartCorpCodes = data.dartCorpCodes || {};
   reportComments = data.reportComments || {};
   presentations = data.presentations || [];
   announcements = data.announcements || [];
@@ -1172,6 +1174,84 @@ function renderPresentations() {
   }).join("");
 }
 
+// ─── DART API 연동 ───
+async function loadDartData(company) {
+  // 이미 corp_code 저장돼 있으면 바로 재무 로드
+  if (dartCorpCodes[company]) {
+    await fetchDartFinancials(company, dartCorpCodes[company]);
+    return;
+  }
+  // 기업 검색
+  showDartStatus(company, "loading", "🔍 DART에서 기업 검색 중...");
+  try {
+    const res  = await fetch(`/.netlify/functions/dart?action=search_corp&corp_name=${encodeURIComponent(company)}`);
+    const data = await res.json();
+    if (!data.found || !data.corps?.length) {
+      showDartStatus(company, "error", "❌ DART에서 기업을 찾을 수 없습니다. 기업명을 확인해주세요.");
+      return;
+    }
+    if (data.corps.length === 1) {
+      dartCorpCodes[company] = data.corps[0].corp_code;
+      await fetchDartFinancials(company, data.corps[0].corp_code);
+    } else {
+      // 여러 기업 후보 선택 UI
+      showDartCorpSelect(company, data.corps);
+    }
+  } catch(e) {
+    showDartStatus(company, "error", "❌ 오류: " + e.message);
+  }
+}
+
+async function fetchDartFinancials(company, corpCode) {
+  showDartStatus(company, "loading", "📊 재무 데이터 불러오는 중... (10~20초 소요)");
+  try {
+    const res  = await fetch(`/.netlify/functions/dart?action=get_financials&corp_code=${corpCode}`);
+    const data = await res.json();
+    if (data.error) { showDartStatus(company, "error", "❌ " + data.error); return; }
+
+    const { annual, quarterly } = data;
+    if ((!annual || annual.length === 0) && (!quarterly || quarterly.length === 0)) {
+      showDartStatus(company, "error", "❌ 재무 데이터가 없습니다. 비상장/IFRS 미적용 기업일 수 있습니다."); return;
+    }
+
+    // annualData 덮어쓰기
+    if (annual?.length) {
+      annualData[company] = annual.map(d => ({ id: Date.now().toString() + d.year, year: d.year, revenue: d.revenue ?? 0, opProfit: d.opProfit ?? 0, netProfit: d.netProfit ?? 0 }));
+    }
+    // quarterlyData 덮어쓰기
+    if (quarterly?.length) {
+      quarterlyData[company] = quarterly.map(d => ({ id: Date.now().toString() + d.quarter, quarter: d.quarter, revenue: d.revenue ?? 0, opProfit: d.opProfit ?? 0, netProfit: d.netProfit ?? 0 }));
+    }
+    dartCorpCodes[company] = corpCode;
+    saveToFirebase();
+    selectCompany(company);
+    showDartStatus(company, "success", `✅ ${annual?.length || 0}개년 연간 · ${quarterly?.length || 0}개 분기 데이터 불러오기 완료`);
+  } catch(e) {
+    showDartStatus(company, "error", "❌ 오류: " + e.message);
+  }
+}
+
+function showDartCorpSelect(company, corps) {
+  const el = document.getElementById("dart-status-" + company);
+  if (!el) return;
+  const opts = corps.map(c =>
+    `<button class="btn btn-ghost" style="padding:5px 14px;font-size:12px" onclick="dartSelectCorp('${company}','${c.corp_code}','${c.corp_name}')">${c.corp_name} ${c.stock_code ? '(' + c.stock_code + ')' : ''}</button>`
+  ).join("");
+  el.innerHTML = `<span style="font-size:12px;color:#f59e0b">⚠️ 여러 기업이 검색됐습니다. 선택해주세요:</span><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${opts}</div>`;
+}
+
+function dartSelectCorp(company, corpCode, corpName) {
+  dartCorpCodes[company] = corpCode;
+  fetchDartFinancials(company, corpCode);
+}
+
+function showDartStatus(company, type, msg) {
+  const el = document.getElementById("dart-status-" + company);
+  if (!el) return;
+  const colors = { loading:"#64748b", error:"#ef4444", success:"#22c55e" };
+  el.innerHTML = `<span style="font-size:12px;color:${colors[type]}">${msg}</span>`;
+}
+
 // ─── 연간/분기 실적 ───
 function toggleAnnualForm(company) {
   const form = document.getElementById("annForm-" + company);
@@ -1562,8 +1642,12 @@ function selectCompany(name) {
     <div class="table-card" style="margin-bottom:16px">
       <div class="table-header">
         <div class="table-title">최근 5개년 실적 <span style="color:#64748b;font-weight:400">(단위: 억원)</span></div>
-        <button class="btn btn-ghost" style="padding:8px 14px;font-size:12px" onclick="toggleAnnualForm('${name}')">+ 데이터 추가</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-ghost" style="padding:8px 14px;font-size:12px;color:#3b82f6;border-color:#3b82f644" onclick="loadDartData('${name}')">⚡ DART 자동입력</button>
+          <button class="btn btn-ghost" style="padding:8px 14px;font-size:12px" onclick="toggleAnnualForm('${name}')">+ 직접 입력</button>
+        </div>
       </div>
+      <div id="dart-status-${name}" style="padding:4px 0 8px;min-height:0"></div>
       <div id="annForm-${name}" style="display:none;${formInputStyle}">
         <div style="${inputRowStyle}">
           <input id="ann-year" class="form-input" placeholder="연도 (예: 2024)" style="width:160px">
