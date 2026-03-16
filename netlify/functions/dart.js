@@ -109,13 +109,18 @@ exports.handler = async (event) => {
         "013": `"${query}"에 해당하는 기업을 찾을 수 없습니다. 정확한 기업명을 입력해주세요.`,
       };
 
+     // 모두 네트워크 에러(null)인 경우 → DART 연결 불가
+      if (dA === null && dB === null && dI === null) {
+        return { statusCode: 200, headers: CORS, body: JSON.stringify({ found: false, message: "DART 서버 연결 실패. 잠시 후 다시 시도해주세요." }) };
+      }
       // API 키 오류 체크
       if (data.status === "010" || data.status === "011" || data.status === "012" || data.status === "020") {
         const msg = statusMsg[data.status] || `DART 오류 (${data.status})`;
         return { statusCode: 200, headers: CORS, body: JSON.stringify({ found: false, message: msg }) };
       }
       if (!merged.length) {
-        return { statusCode: 200, headers: CORS, body: JSON.stringify({ found: false, message: `"${query}"에 해당하는 기업을 찾을 수 없습니다.` }) };
+        const statuses = [dA,dB,dI].filter(Boolean).map(d=>d.status).join(",");
+        return { statusCode: 200, headers: CORS, body: JSON.stringify({ found: false, message: `"${query}" 검색 결과 없음 (DART status: ${statuses})` }) };
       }
 
       const seen  = new Set();
