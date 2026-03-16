@@ -4,6 +4,8 @@ on:
   schedule:
     - cron: '0 0 * * 1'   # 매주 월요일 자정 자동 실행
   workflow_dispatch:        # GitHub에서 수동 실행 가능
+permissions:
+  contents: write
 
 jobs:
   update-corps:
