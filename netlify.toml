@@ -2,13 +2,6 @@
   publish = "."
   command = ""
   functions = "netlify/functions"
-  edge_functions = "netlify/edge-functions"
-
-[functions]
-  node_bundler = "esbuild"
-
-[functions."dart"]
-  node_bundler = "esbuild"
 
 [[redirects]]
   from = "/dart-proxy/*"
