@@ -78,29 +78,33 @@ exports.handler = async (event) => {
       if (!query) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: "corp_name 필요" }) };
 
       const name = encodeURIComponent(query);
-     const bgn = new Date(); bgn.setFullYear(bgn.getFullYear() - 1);
-const bgnStr = bgn.toISOString().slice(0,10).replace(/-/g,"");
-const url  = `https://opendart.fss.or.kr/api/list.json?crtfc_key=${KEY}&corp_name=${name}&bgn_de=${bgnStr}&page_count=20`;
-      const data = await fetchJson(url);
+      const base = `https://opendart.fss.or.kr/api/list.json?crtfc_key=${KEY}&corp_name=${name}&page_count=10`;
+      const [dA, dB, dI] = await Promise.all([
+        fetchJson(base + "&pblntf_ty=A").catch(() => null),
+        fetchJson(base + "&pblntf_ty=B").catch(() => null),
+        fetchJson(base + "&pblntf_ty=I").catch(() => null),
+      ]);
+      const merged = [dA, dB, dI]
+        .filter(d => d && d.status === "000" && Array.isArray(d.list))
+        .flatMap(d => d.list);
+      const data = dA || dB || dI || { status: "999" };
 
       const statusMsg = {
         "010": "등록되지 않은 API 키입니다.",
         "011": "사용할 수 없는 API 키입니다. DART에서 키 상태를 확인해주세요.",
         "012": "접근 IP가 차단되었습니다.",
         "020": "요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.",
-        "013": `"${query}"에 해당하는 기업을 찾을 수 없습니다. 정확한 기업명을 입력해주세요.`,
       };
 
-      if (data.status !== "000") {
-        const msg = statusMsg[data.status] || `DART 오류 (${data.status}): ${data.message || "알 수 없는 오류"}`;
-        return { statusCode: 200, headers: CORS, body: JSON.stringify({ found: false, message: msg }) };
+      if (["010","011","012","020"].includes(data.status)) {
+        return { statusCode: 200, headers: CORS, body: JSON.stringify({ found: false, message: statusMsg[data.status] }) };
       }
-      if (!data.list?.length) {
+      if (!merged.length) {
         return { statusCode: 200, headers: CORS, body: JSON.stringify({ found: false, message: `"${query}"에 해당하는 기업을 찾을 수 없습니다.` }) };
       }
 
       const seen  = new Set();
-      const corps = data.list
+      const corps = merged
         .filter(i => { if (seen.has(i.corp_code)) return false; seen.add(i.corp_code); return true; })
         .slice(0, 5)
         .map(i => ({ corp_code: i.corp_code, corp_name: i.corp_name, stock_code: i.stock_code || "" }));
@@ -153,3 +157,4 @@ const url  = `https://opendart.fss.or.kr/api/list.json?crtfc_key=${KEY}&corp_nam
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: err.message }) };
   }
 };
+```
