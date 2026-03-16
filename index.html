@@ -1184,7 +1184,7 @@ async function loadDartData(company) {
   // 기업 검색
   showDartStatus(company, "loading", "🔍 DART에서 기업 검색 중...");
   try {
-    const res  = await fetch(`/.netlify/functions/dart?action=search_corp&corp_name=${encodeURIComponent(company)}`);
+    const res  = await fetch(`https://dart-proxy.sbzzang7.workers.dev?action=search_corp&corp_name=${encodeURIComponent(company)}`);
     const data = await res.json();
     if (!data.found || !data.corps?.length) {
       showDartStatus(company, "error", "❌ DART에서 기업을 찾을 수 없습니다. 기업명을 확인해주세요.");
@@ -1205,7 +1205,7 @@ async function loadDartData(company) {
 async function fetchDartFinancials(company, corpCode) {
   showDartStatus(company, "loading", "📊 재무 데이터 불러오는 중... (10~20초 소요)");
   try {
-    const res  = await fetch(`/.netlify/functions/dart?action=get_financials&corp_code=${corpCode}`);
+    const res  = await fetch(`https://dart-proxy.sbzzang7.workers.dev?action=get_financials&corp_code=${corpCode}`);
     const data = await res.json();
     if (data.error) { showDartStatus(company, "error", "❌ " + data.error); return; }
 
