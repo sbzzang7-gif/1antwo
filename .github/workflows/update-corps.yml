@@ -1,0 +1,330 @@
+// Cloudflare Worker — DART API Proxy
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Content-Type": "application/json",
+};
+
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), { status, headers: CORS });
+}
+
+// ── 주요 상장사 사전 테이블 (즉시 검색용) ─────────────────────────────────
+// [기업명, corp_code(8자리), 종목코드]
+const CORP_TABLE = [
+  ["삼성전자",          "00126380", "005930"],
+  ["SK하이닉스",        "00164779", "000660"],
+  ["현대자동차",        "00164742", "005380"],
+  ["기아",              "00106641", "000270"],
+  ["NAVER",             "00266961", "035420"],
+  ["카카오",            "00258801", "035720"],
+  ["셀트리온",          "00413046", "068270"],
+  ["삼성SDI",           "00126362", "006400"],
+  ["현대모비스",        "00164788", "012330"],
+  ["포스코인터내셔널",  "00124504", "047050"],
+  ["산일전기",          "00366438", "062040"],
+  ["KB금융",            "00688996", "105560"],
+  ["신한지주",          "00382199", "055550"],
+  ["하나금융지주",      "00547583", "086790"],
+  ["우리금융지주",      "01350869", "316140"],
+  ["LG전자",            "00401731", "066570"],
+  ["LG화학",            "00356361", "051910"],
+  ["LG에너지솔루션",    "01515323", "373220"],
+  ["삼성바이오로직스",  "00877059", "207940"],
+  ["삼성생명",          "00126256", "032830"],
+  ["삼성전기",          "00126371", "009150"],
+  ["삼성물산",          "00149655", "028260"],
+  ["삼성중공업",        "00126478", "010140"],
+  ["에코프로비엠",      "01160363", "247540"],
+  ["에코프로",          "00536541", "086520"],
+  ["크래프톤",          "00760971", "259960"],
+  ["메리츠금융지주",    "00860332", "138040"],
+  ["고려아연",          "00102858", "010130"],
+  ["두산에너빌리티",    "00159616", "034020"],
+  ["SK이노베이션",      "00631518", "096770"],
+  ["한국전력공사",      "00159193", "015760"],
+  ["카카오뱅크",        "01133217", "323410"],
+  ["카카오페이",        "01244601", "377300"],
+  ["하이브",            "01204056", "352820"],
+  ["엔씨소프트",        "00261443", "036570"],
+  ["넷마블",            "00904672", "251270"],
+  ["SK텔레콤",          "00159023", "017670"],
+  ["LG유플러스",        "00231363", "032640"],
+  ["한화에어로스페이스","00126566", "012450"],
+  ["한화솔루션",        "00162461", "009830"],
+  ["롯데케미칼",        "00165413", "011170"],
+  ["한미약품",          "00828497", "128940"],
+  ["유한양행",          "00145109", "000100"],
+  ["셀트리온헬스케어",  "00554024", "091990"],
+  ["HD현대",            "01205709", "267250"],
+  ["HD한국조선해양",    "00164830", "009540"],
+  ["HD현대중공업",      "01390344", "329180"],
+  ["SK바이오사이언스",  "01319899", "302440"],
+  ["대한항공",          "00113526", "003490"],
+  ["현대건설",          "00164478", "000720"],
+  ["포스코퓨처엠",      "00155276", "003670"],
+  ["SK스퀘어",          "01596425", "402340"],
+  ["두산로보틱스",      "01105153", "454910"],
+  ["코스맥스",          "01009789", "192820"],
+  ["코스메카코리아",    "00631909", "241710"],
+  ["한국콜마",          "00106239", "161890"],
+  ["아모레퍼시픽",      "00114223", "090430"],
+  ["LG생활건강",        "00356360", "051900"],
+  ["BGF리테일",         "00994466", "282330"],
+  ["GS리테일",          "00264900", "007070"],
+  ["이마트",            "00353484", "139480"],
+  ["롯데쇼핑",          "00113675", "023530"],
+  ["카카오게임즈",      "00764403", "293490"],
+  ["펄어비스",          "01064760", "263750"],
+  ["컴투스",            "00224882", "078340"],
+  ["위메이드",          "00571166", "112040"],
+  ["HMM",               "01093872", "011200"],
+  ["팬오션",            "00384649", "028670"],
+  ["현대글로비스",      "00164746", "086280"],
+  ["OCI홀딩스",         "00111136", "010060"],
+  ["한화",              "00104598", "000880"],
+  ["포스코홀딩스",      "00104865", "005490"],
+  ["SK",                "00126186", "034730"],
+  ["LG",                "00356344", "003550"],
+  ["롯데지주",          "01257564", "004990"],
+  ["두산",              "00112765", "000150"],
+  ["GS",                "00631001", "078930"],
+  ["CJ",                "00380795", "001040"],
+  ["LS",                "00651072", "006260"],
+  ["현대제철",          "00154703", "004020"],
+  ["POSCO",             "00104865", "005490"],
+  ["SK이노",            "00631518", "096770"],
+  ["에스오일",          "00104821", "010950"],
+  ["현대오일뱅크",      "00100798", "078930"],
+  ["SK바이오팜",        "00902033", "326030"],
+  ["삼성화재",          "00126268", "000810"],
+  ["DB손해보험",        "00113688", "005830"],
+  ["현대해상",          "00113874", "001450"],
+  ["미래에셋증권",      "00312257", "006800"],
+  ["한국투자증권",      "00148171", "071050"],
+  ["NH투자증권",        "00347886", "005940"],
+  ["키움증권",          "00642696", "039490"],
+  ["삼성증권",          "00126286", "016360"],
+];
+
+function searchCorpTable(query) {
+  const exact   = CORP_TABLE.filter(c => c[0] === query);
+  const partial = CORP_TABLE.filter(c => c[0] !== query && c[0].includes(query));
+  return [...exact, ...partial]
+    .slice(0, 10)
+    .map(c => ({ corp_code: c[1], corp_name: c[0], stock_code: c[2] }));
+}
+
+// ── GitHub corps.json 기반 기업 검색 (캐시 12시간) ───────────────────────
+const CORPS_JSON_URL = 'https://raw.githubusercontent.com/sbzzang7-gif/1antwo/main/corps.json';
+
+async function searchCorpFromGitHub(query) {
+  const cache    = caches.default;
+  const cacheKey = new Request('https://dart-corps-github-cache/v1');
+
+  let corps = null;
+  const cached = await cache.match(cacheKey);
+  if (cached) {
+    corps = await cached.json();
+  } else {
+    const res = await fetch(CORPS_JSON_URL);
+    if (!res.ok) return null;
+    corps = await res.json();
+    // 12시간 캐시
+    await cache.put(cacheKey, new Response(JSON.stringify(corps), {
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=43200' }
+    }));
+  }
+
+  if (!Array.isArray(corps)) return null;
+  const exact   = corps.filter(c => c[0] === query);
+  const partial = corps.filter(c => c[0] !== query && c[0].includes(query));
+  return [...exact, ...partial].slice(0, 10)
+    .map(c => ({ corp_code: c[1], corp_name: c[0], stock_code: c[2] || '' }));
+}
+
+// ── (하위호환) DART corpCode.xml 직접 다운로드 ────────────────────────────
+async function searchCorpFromDartXml(key, query) {
+  const cache    = caches.default;
+  const cacheKey = new Request('https://dart-corp-xml-cache/v2');
+
+  let xml = null;
+  const cached = await cache.match(cacheKey);
+  if (cached) {
+    xml = await cached.text();
+  } else {
+    const zipRes = await fetch(
+      `https://opendart.fss.or.kr/api/corpCode.xml?crtfc_key=${key}`,
+      { headers: { "User-Agent": "Mozilla/5.0" } }
+    );
+    if (!zipRes.ok) return null;
+    const buffer = await zipRes.arrayBuffer();
+    xml = await extractXmlFromZip(buffer);
+    if (!xml) return null;
+    // 12시간 캐시
+    await cache.put(cacheKey, new Response(xml, {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'max-age=43200' }
+    }));
+  }
+
+  return searchXmlForCorp(xml, query);
+}
+
+// ── 재무 데이터 관련 함수 ─────────────────────────────────────────────────
+async function dartGet(url) {
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" },
+    cf: { cacheTtl: 0 }
+  });
+  return res.json();
+}
+
+function toUk(str) {
+  if (!str || str === "-" || !str.trim()) return null;
+  const s = str.replace(/,/g, "").trim();
+  const n = s.startsWith("(") && s.endsWith(")")
+    ? -parseInt(s.slice(1, -1), 10) : parseInt(s, 10);
+  return isNaN(n) ? null : Math.round(n / 100_000_000);
+}
+
+function extract(d) {
+  if (!d || d.status !== "000" || !d.list) return null;
+  let revenue = null, opProfit = null, netProfit = null;
+
+  // account_detail이 "-" 또는 빈 값인 상위 계정만 사용 (세부 항목 제외)
+  const items = d.list.filter(i =>
+    !i.account_detail || i.account_detail === "-" || i.account_detail === ""
+  );
+
+  // ord 순서대로 정렬 (DART 응답 순서가 보장되지 않을 수 있음)
+  items.sort((a, b) => Number(a.ord || 0) - Number(b.ord || 0));
+
+  for (const item of items) {
+    const nm  = (item.account_nm || "").trim();
+    const val = toUk(item.thstrm_amount);
+    if (val === null) continue;
+
+    // 매출액: 정확한 계정명만 매칭
+    if (!revenue && /^(매출액|수익\(매출액\)|영업수익|매출)$/.test(nm))
+      revenue = val;
+
+    // 영업이익: "영업이익" 또는 "영업이익(손실)"만 — 세전계속영업이익 등 제외
+    if (!opProfit && /^영업이익(\(손실\))?$/.test(nm))
+      opProfit = val;
+
+    // 당기순이익: 연결 전체 순이익 우선, 지배주주 귀속분 제외
+    if (!netProfit && /^(당기순이익|당기순이익\(손실\)|분기순이익|분기순이익\(손실\)|당기순손실|분기순손실)$/.test(nm))
+      netProfit = val;
+  }
+  return (revenue === null && opProfit === null) ? null : { revenue, opProfit, netProfit };
+}
+
+async function fetchFin(key, code, year, reprt) {
+  const u = `https://opendart.fss.or.kr/api/fnlttSinglAcntAll.json?crtfc_key=${key}&corp_code=${code}&bsns_year=${year}&reprt_code=${reprt}`;
+  try {
+    const r1 = extract(await dartGet(u + "&fs_div=CFS"));
+    if (r1) return r1;
+    return extract(await dartGet(u + "&fs_div=OFS"));
+  } catch { return null; }
+}
+
+function diff(a, b) {
+  if (!a || !b) return null;
+  const s = (x, y) => (x != null && y != null) ? x - y : null;
+  return { revenue: s(a.revenue, b.revenue), opProfit: s(a.opProfit, b.opProfit), netProfit: s(a.netProfit, b.netProfit) };
+}
+
+// ── 메인 핸들러 ───────────────────────────────────────────────────────────
+export default {
+  async fetch(request, env) {
+    if (request.method === "OPTIONS")
+      return new Response("", { status: 200, headers: { ...CORS, "Access-Control-Allow-Methods": "GET" } });
+
+    const KEY = env.DART_API_KEY;
+    if (!KEY) return json({ error: "DART_API_KEY 없음" }, 500);
+
+    const url = new URL(request.url);
+    const p   = Object.fromEntries(url.searchParams);
+
+    try {
+      // ── 기업 검색 ──────────────────────────────────────────────────────
+      if (p.action === "search_corp") {
+        const query = (p.corp_name || "").trim();
+        if (!query) return json({ error: "corp_name 필요" }, 400);
+
+        // 1단계: 사전 테이블에서 즉시 검색
+        const tableResults = searchCorpTable(query);
+        if (tableResults.length > 0) {
+          return json({ found: true, corps: tableResults, source: "table" });
+        }
+
+        // 2단계: GitHub corps.json (전체 기업 목록) 에서 검색
+        try {
+          const ghResults = await searchCorpFromGitHub(query);
+          if (ghResults && ghResults.length > 0) {
+            return json({ found: true, corps: ghResults, source: "github" });
+          }
+        } catch (e) { /* 실패 시 다음 단계로 */ }
+
+        // 3단계: DART corpCode.xml 직접 다운로드 (최후 수단)
+        try {
+          const xmlResults = await searchCorpFromDartXml(KEY, query);
+          if (xmlResults && xmlResults.length > 0) {
+            return json({ found: true, corps: xmlResults, source: "dart_xml" });
+          }
+        } catch (e) { /* 실패 시 not found */ }
+
+        return json({ found: false, message: `"${query}"에 해당하는 기업을 찾을 수 없습니다. corps.json이 아직 없을 수 있습니다.` });
+      }
+
+      // ── 재무 데이터 ────────────────────────────────────────────────────
+      if (p.action === "get_financials") {
+        const code = p.corp_code;
+        if (!code) return json({ error: "corp_code 필요" }, 400);
+
+        const now = new Date(), cy = now.getFullYear();
+        const latestYear = cy - 1; // 항상 전년도부터
+
+        // 연간: 최근 6개년 시도 → 데이터 있는 것만 최신 5개 반환
+        const annYears = Array.from({ length: 6 }, (_, i) => String(latestYear - i));
+        const annRaw   = await Promise.all(annYears.map(y => fetchFin(KEY, code, y, "11011")));
+        const annual   = annYears
+          .map((y, i) => annRaw[i] ? { year: y, ...annRaw[i] } : null)
+          .filter(Boolean)
+          .reverse()
+          .slice(-5);
+
+        // 분기: 최근 3개년 × 4분기
+        const qYears  = [latestYear, latestYear - 1, latestYear - 2].map(String);
+        const CODES   = ["11011", "11014", "11012", "11013"];
+        const fetches = qYears.flatMap(y => CODES.map(c => ({ y, c })));
+        const rawAll  = await Promise.all(fetches.map(f => fetchFin(KEY, code, f.y, f.c)));
+
+        const cumMap = {};
+        fetches.forEach(({ y, c }, i) => {
+          if (!cumMap[y]) cumMap[y] = {};
+          cumMap[y][c] = rawAll[i];
+        });
+
+        const quarterly = [];
+        for (const yr of qYears) {
+          const cm = cumMap[yr] || {}, yy = yr.slice(2);
+          const q1 = cm["11013"];
+          const q2 = diff(cm["11012"], cm["11013"]);
+          const q3 = diff(cm["11014"], cm["11012"]);
+          const q4 = diff(cm["11011"], cm["11014"]);
+          if (q1?.revenue != null) quarterly.push({ quarter: yy + "Q1", ...q1 });
+          if (q2?.revenue != null) quarterly.push({ quarter: yy + "Q2", ...q2 });
+          if (q3?.revenue != null) quarterly.push({ quarter: yy + "Q3", ...q3 });
+          if (q4?.revenue != null) quarterly.push({ quarter: yy + "Q4", ...q4 });
+        }
+        quarterly.sort((a, b) => a.quarter.localeCompare(b.quarter));
+        return json({ annual, quarterly: quarterly.slice(-8) });
+      }
+
+      return json({ error: "알 수 없는 action" }, 400);
+
+    } catch (err) {
+      return json({ error: err.message }, 500);
+    }
+  }
+};
