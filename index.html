@@ -1181,25 +1181,38 @@ async function loadDartData(company) {
     await fetchDartFinancials(company, dartCorpCodes[company]);
     return;
   }
-  // 기업 검색
-  showDartStatus(company, "loading", "🔍 DART에서 기업 검색 중...");
-  try {
-    const res  = await fetch(`https://dart-proxy.sbzzang7.workers.dev?action=search_corp&corp_name=${encodeURIComponent(company)}`);
-    const data = await res.json();
-    if (!data.found || !data.corps?.length) {
-      showDartStatus(company, "error", "❌ DART에서 기업을 찾을 수 없습니다. 기업명을 확인해주세요.");
-      return;
-    }
-    if (data.corps.length === 1) {
-      dartCorpCodes[company] = data.corps[0].corp_code;
-      await fetchDartFinancials(company, data.corps[0].corp_code);
-    } else {
-      // 여러 기업 후보 선택 UI
-      showDartCorpSelect(company, data.corps);
-    }
-  } catch(e) {
-    showDartStatus(company, "error", "❌ 오류: " + e.message);
+  // corp_code 직접 입력 UI 표시
+  const statusDiv = document.getElementById(`dart-status-${company}`);
+  if (!statusDiv) return;
+  statusDiv.innerHTML = `
+    <div style="background:#1e3a5f;border:1px solid #3b82f6;border-radius:8px;padding:12px;margin:8px 0;">
+      <div style="color:#93c5fd;font-size:13px;margin-bottom:8px;">
+        🔍 DART corp_code를 입력해주세요
+        <a href="https://dart.fss.or.kr/dsab001/main.do" target="_blank"
+           style="color:#60a5fa;margin-left:8px;font-size:12px;">DART에서 찾기 →</a>
+      </div>
+      <div style="color:#cbd5e1;font-size:12px;margin-bottom:8px;">
+        DART 사이트 → 기업명 검색 → URL의 8자리 숫자가 corp_code
+      </div>
+      <div style="display:flex;gap:8px;">
+        <input id="dart-code-input-${company}" type="text" placeholder="예: 00356370"
+          style="flex:1;padding:6px 10px;background:#0f172a;border:1px solid #334155;border-radius:6px;color:white;font-size:13px;" />
+        <button onclick="submitDartCode('${company}')"
+          style="padding:6px 14px;background:#3b82f6;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;">확인</button>
+      </div>
+    </div>`;
+}
+
+async function submitDartCode(company) {
+  const input = document.getElementById(`dart-code-input-${company}`);
+  const code = (input?.value || "").trim().replace(/\D/g, "").padStart(8, "0");
+  if (code.length !== 8) {
+    alert("8자리 corp_code를 입력해주세요.");
+    return;
   }
+  dartCorpCodes[company] = code;
+  saveToFirebase();
+  await fetchDartFinancials(company, code);
 }
 
 async function fetchDartFinancials(company, corpCode) {
