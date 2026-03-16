@@ -1181,19 +1181,40 @@ async function loadDartData(company) {
     await fetchDartFinancials(company, dartCorpCodes[company]);
     return;
   }
-  // corp_code 직접 입력 UI 표시
+  // 기업명으로 DART 자동 검색
+  showDartStatus(company, "loading", "🔍 DART에서 기업 검색 중...");
+  try {
+    const res = await fetch(`https://dart-proxy.sbzzang7.workers.dev?action=search_corp&corp_name=${encodeURIComponent(company)}`);
+    const data = await res.json();
+    if (data.found && data.corps && data.corps.length > 0) {
+      if (data.corps.length === 1) {
+        // 결과 1개 → 바로 재무 로드
+        dartSelectCorp(company, data.corps[0].corp_code, data.corps[0].corp_name);
+      } else {
+        // 여러 개 → 선택 UI
+        showDartCorpSelect(company, data.corps);
+      }
+    } else {
+      // 검색 실패 → 수동 입력 UI
+      showDartManualInput(company, data.message || "검색 결과 없음");
+    }
+  } catch(e) {
+    showDartManualInput(company, "네트워크 오류: " + e.message);
+  }
+}
+
+function showDartManualInput(company, reason) {
   const statusDiv = document.getElementById(`dart-status-${company}`);
   if (!statusDiv) return;
   statusDiv.innerHTML = `
     <div style="background:#1e3a5f;border:1px solid #3b82f6;border-radius:8px;padding:12px;margin:8px 0;">
-      <div style="color:#93c5fd;font-size:13px;margin-bottom:8px;">
-        🔍 DART corp_code를 입력해주세요
+      <div style="color:#f59e0b;font-size:12px;margin-bottom:8px;">⚠️ 자동 검색 실패: ${reason}</div>
+      <div style="color:#93c5fd;font-size:13px;margin-bottom:6px;">
+        🔍 corp_code 직접 입력
         <a href="https://dart.fss.or.kr/dsab001/main.do" target="_blank"
            style="color:#60a5fa;margin-left:8px;font-size:12px;">DART에서 찾기 →</a>
       </div>
-      <div style="color:#cbd5e1;font-size:12px;margin-bottom:8px;">
-        DART 사이트 → 기업명 검색 → URL의 8자리 숫자가 corp_code
-      </div>
+      <div style="color:#94a3b8;font-size:11px;margin-bottom:8px;">DART 사이트 → 기업명 검색 → URL의 8자리 숫자</div>
       <div style="display:flex;gap:8px;">
         <input id="dart-code-input-${company}" type="text" placeholder="예: 00356370"
           style="flex:1;padding:6px 10px;background:#0f172a;border:1px solid #334155;border-radius:6px;color:white;font-size:13px;" />
