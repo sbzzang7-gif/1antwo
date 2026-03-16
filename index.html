@@ -1174,117 +1174,6 @@ function renderPresentations() {
   }).join("");
 }
 
-// ─── DART API 연동 ───
-async function loadDartData(company) {
-  // 이미 corp_code 저장돼 있으면 바로 재무 로드
-  if (dartCorpCodes[company]) {
-    await fetchDartFinancials(company, dartCorpCodes[company]);
-    return;
-  }
-  // 기업명으로 DART 자동 검색
-  showDartStatus(company, "loading", "🔍 DART에서 기업 검색 중...");
-  try {
-    const res = await fetch(`https://dart-proxy.sbzzang7.workers.dev?action=search_corp&corp_name=${encodeURIComponent(company)}`);
-    const data = await res.json();
-    if (data.found && data.corps && data.corps.length > 0) {
-      if (data.corps.length === 1) {
-        // 결과 1개 → 바로 재무 로드
-        dartSelectCorp(company, data.corps[0].corp_code, data.corps[0].corp_name);
-      } else {
-        // 여러 개 → 선택 UI
-        showDartCorpSelect(company, data.corps);
-      }
-    } else {
-      // 검색 실패 → 수동 입력 UI
-      showDartManualInput(company, data.message || "검색 결과 없음");
-    }
-  } catch(e) {
-    showDartManualInput(company, "네트워크 오류: " + e.message);
-  }
-}
-
-function showDartManualInput(company, reason) {
-  const statusDiv = document.getElementById(`dart-status-${company}`);
-  if (!statusDiv) return;
-  statusDiv.innerHTML = `
-    <div style="background:#1e3a5f;border:1px solid #3b82f6;border-radius:8px;padding:12px;margin:8px 0;">
-      <div style="color:#f59e0b;font-size:12px;margin-bottom:8px;">⚠️ 자동 검색 실패: ${reason}</div>
-      <div style="color:#93c5fd;font-size:13px;margin-bottom:6px;">
-        🔍 corp_code 직접 입력
-        <a href="https://dart.fss.or.kr/dsab001/main.do" target="_blank"
-           style="color:#60a5fa;margin-left:8px;font-size:12px;">DART에서 찾기 →</a>
-      </div>
-      <div style="color:#94a3b8;font-size:11px;margin-bottom:8px;">DART 사이트 → 기업명 검색 → URL의 8자리 숫자</div>
-      <div style="display:flex;gap:8px;">
-        <input id="dart-code-input-${company}" type="text" placeholder="예: 00356370"
-          style="flex:1;padding:6px 10px;background:#0f172a;border:1px solid #334155;border-radius:6px;color:white;font-size:13px;" />
-        <button onclick="submitDartCode('${company}')"
-          style="padding:6px 14px;background:#3b82f6;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;">확인</button>
-      </div>
-    </div>`;
-}
-
-async function submitDartCode(company) {
-  const input = document.getElementById(`dart-code-input-${company}`);
-  const code = (input?.value || "").trim().replace(/\D/g, "").padStart(8, "0");
-  if (code.length !== 8) {
-    alert("8자리 corp_code를 입력해주세요.");
-    return;
-  }
-  dartCorpCodes[company] = code;
-  saveToFirebase();
-  await fetchDartFinancials(company, code);
-}
-
-async function fetchDartFinancials(company, corpCode) {
-  showDartStatus(company, "loading", "📊 재무 데이터 불러오는 중... (10~20초 소요)");
-  try {
-    const res  = await fetch(`https://dart-proxy.sbzzang7.workers.dev?action=get_financials&corp_code=${corpCode}`);
-    const data = await res.json();
-    if (data.error) { showDartStatus(company, "error", "❌ " + data.error); return; }
-
-    const { annual, quarterly } = data;
-    if ((!annual || annual.length === 0) && (!quarterly || quarterly.length === 0)) {
-      showDartStatus(company, "error", "❌ 재무 데이터가 없습니다. 비상장/IFRS 미적용 기업일 수 있습니다."); return;
-    }
-
-    // annualData 덮어쓰기
-    if (annual?.length) {
-      annualData[company] = annual.map(d => ({ id: Date.now().toString() + d.year, year: d.year, revenue: d.revenue ?? 0, opProfit: d.opProfit ?? 0, netProfit: d.netProfit ?? 0 }));
-    }
-    // quarterlyData 덮어쓰기
-    if (quarterly?.length) {
-      quarterlyData[company] = quarterly.map(d => ({ id: Date.now().toString() + d.quarter, quarter: d.quarter, revenue: d.revenue ?? 0, opProfit: d.opProfit ?? 0, netProfit: d.netProfit ?? 0 }));
-    }
-    dartCorpCodes[company] = corpCode;
-    saveToFirebase();
-    selectCompany(company);
-    showDartStatus(company, "success", `✅ ${annual?.length || 0}개년 연간 · ${quarterly?.length || 0}개 분기 데이터 불러오기 완료`);
-  } catch(e) {
-    showDartStatus(company, "error", "❌ 오류: " + e.message);
-  }
-}
-
-function showDartCorpSelect(company, corps) {
-  const el = document.getElementById("dart-status-" + company);
-  if (!el) return;
-  const opts = corps.map(c =>
-    `<button class="btn btn-ghost" style="padding:5px 14px;font-size:12px" onclick="dartSelectCorp('${company}','${c.corp_code}','${c.corp_name}')">${c.corp_name} ${c.stock_code ? '(' + c.stock_code + ')' : ''}</button>`
-  ).join("");
-  el.innerHTML = `<span style="font-size:12px;color:#f59e0b">⚠️ 여러 기업이 검색됐습니다. 선택해주세요:</span><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${opts}</div>`;
-}
-
-function dartSelectCorp(company, corpCode, corpName) {
-  dartCorpCodes[company] = corpCode;
-  fetchDartFinancials(company, corpCode);
-}
-
-function showDartStatus(company, type, msg) {
-  const el = document.getElementById("dart-status-" + company);
-  if (!el) return;
-  const colors = { loading:"#64748b", error:"#ef4444", success:"#22c55e" };
-  el.innerHTML = `<span style="font-size:12px;color:${colors[type]}">${msg}</span>`;
-}
 
 // ─── 연간/분기 실적 ───
 function toggleAnnualForm(company) {
@@ -1677,11 +1566,9 @@ function selectCompany(name) {
       <div class="table-header">
         <div class="table-title">최근 5개년 실적 <span style="color:#64748b;font-weight:400">(단위: 억원)</span></div>
         <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn btn-ghost" style="padding:8px 14px;font-size:12px;color:#3b82f6;border-color:#3b82f644" onclick="loadDartData('${name}')">⚡ DART 자동입력</button>
           <button class="btn btn-ghost" style="padding:8px 14px;font-size:12px" onclick="toggleAnnualForm('${name}')">+ 직접 입력</button>
         </div>
       </div>
-      <div id="dart-status-${name}" style="padding:4px 0 8px;min-height:0"></div>
       <div id="annForm-${name}" style="display:none;${formInputStyle}">
         <div style="${inputRowStyle}">
           <input id="ann-year" class="form-input" placeholder="연도 (예: 2024)" style="width:160px">
