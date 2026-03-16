@@ -1,36 +1,86 @@
-name: DART 기업 목록 업데이트
+import requests
+import zipfile
+import xml.etree.ElementTree as ET
+import json
+import io
+import os
+import sys
+import traceback
 
-on:
-  schedule:
-    - cron: '0 0 * * 1'   # 매주 월요일 자정 자동 실행
-  workflow_dispatch:        # GitHub에서 수동 실행 가능
-permissions:
-  contents: write
+def main():
+    api_key = os.environ.get('DART_API_KEY', '').strip()
+    if not api_key:
+        print("ERROR: DART_API_KEY is not set")
+        sys.exit(1)
 
-jobs:
-  update-corps:
-    runs-on: ubuntu-latest
-    steps:
-      - name: 저장소 체크아웃
-        uses: actions/checkout@v4
+    print("Downloading DART corpCode.xml ...")
+    url = 'https://opendart.fss.or.kr/api/corpCode.xml?crtfc_key=' + api_key
 
-      - name: Python 설정
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
+    try:
+        resp = requests.get(url, timeout=60)
+        print("HTTP status:", resp.status_code)
+        resp.raise_for_status()
+    except Exception as e:
+        print("ERROR: download failed:", e)
+        sys.exit(1)
 
-      - name: 패키지 설치
-        run: pip install requests
+    print("Downloaded", len(resp.content), "bytes")
 
-      - name: DART 기업 목록 다운로드 및 파싱
-        run: python scripts/update_corps.py
-        env:
-          DART_API_KEY: ${{ secrets.DART_API_KEY }}
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(resp.content))
+        names = zf.namelist()
+        print("ZIP contents:", names)
 
-      - name: 변경사항 커밋 및 푸시
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add corps.json
-          git diff --staged --quiet || git commit -m "chore: DART 기업 목록 업데이트"
-          git push
+        xml_name = None
+        for n in names:
+            if n.upper() == 'CORPCODE.XML':
+                xml_name = n
+                break
+
+        if not xml_name:
+            print("ERROR: CORPCODE.XML not found in ZIP")
+            sys.exit(1)
+
+        xml_data = zf.read(xml_name)
+        zf.close()
+    except Exception as e:
+        print("ERROR: ZIP parsing failed:", e)
+        sys.exit(1)
+
+    print("XML size:", len(xml_data), "bytes")
+
+    try:
+        xml_str = xml_data.decode('utf-8')
+    except Exception:
+        xml_str = xml_data.decode('euc-kr')
+
+    print("Parsing XML ...")
+    try:
+        root = ET.fromstring(xml_str)
+    except Exception as e:
+        print("ERROR: XML parsing failed:", e)
+        sys.exit(1)
+
+    corps = []
+    for item in root.findall('.//list'):
+        code  = (item.findtext('corp_code')  or '').strip()
+        name  = (item.findtext('corp_name')  or '').strip()
+        stock = (item.findtext('stock_code') or '').strip()
+        if code and name:
+            corps.append([name, code, stock])
+
+    print("Total companies:", len(corps))
+
+    output = json.dumps(corps, ensure_ascii=False, separators=(',', ':'))
+    with open('corps.json', 'w', encoding='utf-8') as f:
+        f.write(output)
+
+    print("Saved corps.json,", len(output), "bytes")
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as e:
+        print("FATAL:", e)
+        traceback.print_exc()
+        sys.exit(1)
