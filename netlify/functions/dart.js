@@ -1,5 +1,6 @@
 const https = require("https");
 
+// ── HTTP GET → JSON ──────────────────────────────────────────────
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
     const req = https.get(url, (res) => {
@@ -18,6 +19,7 @@ function fetchJson(url) {
   });
 }
 
+// ── 금액 문자열 → 억원 ──────────────────────────────────────────
 function toUk(str) {
   if (!str || str === "-" || str.trim() === "") return null;
   const s = str.replace(/,/g, "").trim();
@@ -28,6 +30,7 @@ function toUk(str) {
   return Math.round(n / 100_000_000);
 }
 
+// ── DART 재무제표 파싱 ───────────────────────────────────────────
 function extract(d) {
   if (!d || d.status !== "000" || !d.list) return null;
   let revenue = null, opProfit = null, netProfit = null;
@@ -43,6 +46,7 @@ function extract(d) {
   return { revenue, opProfit, netProfit };
 }
 
+// ── 재무제표 1건 (CFS → OFS 폴백) ───────────────────────────────
 async function fetchFin(key, code, year, reprt) {
   const base = `https://opendart.fss.or.kr/api/fnlttSinglAcntAll.json?crtfc_key=${key}&corp_code=${code}&bsns_year=${year}&reprt_code=${reprt}`;
   try {
@@ -52,15 +56,18 @@ async function fetchFin(key, code, year, reprt) {
   } catch { return null; }
 }
 
+// ── Standalone 분기 계산 ─────────────────────────────────────────
 function diff(a, b) {
   if (!a || !b) return null;
   const s = (x, y) => (x !== null && y !== null) ? x - y : null;
   return { revenue: s(a.revenue, b.revenue), opProfit: s(a.opProfit, b.opProfit), netProfit: s(a.netProfit, b.netProfit) };
 }
 
+// ════════════════════════════════════════════════════════════════
 exports.handler = async (event) => {
   const CORS = { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" };
 
+  // OPTIONS preflight
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 200, headers: { ...CORS, "Access-Control-Allow-Methods": "GET", "Access-Control-Allow-Headers": "Content-Type" }, body: "" };
   }
@@ -73,31 +80,39 @@ exports.handler = async (event) => {
 
   try {
 
+    // ── 1. 기업 검색 ─────────────────────────────────────────────
     if (action === "search_corp") {
       const query = (p.corp_name || "").trim();
       if (!query) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: "corp_name 필요" }) };
 
       const name = encodeURIComponent(query);
+      // A(정기), B(주요사항), I(거래소) 타입 병렬 검색 → 빠르면서 넓은 결과
       const base = `https://opendart.fss.or.kr/api/list.json?crtfc_key=${KEY}&corp_name=${name}&page_count=10`;
       const [dA, dB, dI] = await Promise.all([
         fetchJson(base + "&pblntf_ty=A").catch(() => null),
         fetchJson(base + "&pblntf_ty=B").catch(() => null),
         fetchJson(base + "&pblntf_ty=I").catch(() => null),
       ]);
+      // 세 결과 중 status=000 인 것의 list 합치기
       const merged = [dA, dB, dI]
         .filter(d => d && d.status === "000" && Array.isArray(d.list))
         .flatMap(d => d.list);
+      // 키 오류 체크 (dA 기준)
       const data = dA || dB || dI || { status: "999" };
 
+      // DART API 키 오류 상세 메시지
       const statusMsg = {
         "010": "등록되지 않은 API 키입니다.",
         "011": "사용할 수 없는 API 키입니다. DART에서 키 상태를 확인해주세요.",
         "012": "접근 IP가 차단되었습니다.",
         "020": "요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.",
+        "013": `"${query}"에 해당하는 기업을 찾을 수 없습니다. 정확한 기업명을 입력해주세요.`,
       };
 
-      if (["010","011","012","020"].includes(data.status)) {
-        return { statusCode: 200, headers: CORS, body: JSON.stringify({ found: false, message: statusMsg[data.status] }) };
+      // API 키 오류 체크
+      if (data.status === "010" || data.status === "011" || data.status === "012" || data.status === "020") {
+        const msg = statusMsg[data.status] || `DART 오류 (${data.status})`;
+        return { statusCode: 200, headers: CORS, body: JSON.stringify({ found: false, message: msg }) };
       }
       if (!merged.length) {
         return { statusCode: 200, headers: CORS, body: JSON.stringify({ found: false, message: `"${query}"에 해당하는 기업을 찾을 수 없습니다.` }) };
@@ -112,6 +127,7 @@ exports.handler = async (event) => {
       return { statusCode: 200, headers: CORS, body: JSON.stringify({ found: true, corps }) };
     }
 
+    // ── 2. 재무 데이터 로드 ──────────────────────────────────────
     if (action === "get_financials") {
       const corpCode = p.corp_code;
       if (!corpCode) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: "corp_code 필요" }) };
@@ -120,10 +136,12 @@ exports.handler = async (event) => {
       const curY = now.getFullYear();
       const latestAnnual = now.getMonth() >= 3 ? curY - 1 : curY - 2;
 
+      // 연간 5개년
       const annYears = Array.from({ length: 5 }, (_, i) => String(latestAnnual - i));
       const annRaw   = await Promise.all(annYears.map(y => fetchFin(KEY, corpCode, y, "11011")));
       const annual   = annYears.map((y, i) => annRaw[i] ? { year: y, ...annRaw[i] } : null).filter(Boolean).reverse();
 
+      // 분기 8개
       const qYears  = [String(latestAnnual), String(latestAnnual - 1), String(latestAnnual - 2)];
       const QCODES  = ["11011", "11014", "11012", "11013"];
       const fetches = qYears.flatMap(y => QCODES.map(c => ({ y, c })));
@@ -157,4 +175,3 @@ exports.handler = async (event) => {
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: err.message }) };
   }
 };
-```
