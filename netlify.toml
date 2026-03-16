@@ -1,4 +1,5 @@
 [build]
   publish = "."
   command = ""
-functions = "netlify/functions"
+  functions = "netlify/functions"
+  edge_functions = "netlify/edge-functions"
