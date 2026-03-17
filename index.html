@@ -159,12 +159,15 @@
     <div class="table-card">
       <div class="table-header">
         <div class="table-title">보유 종목 현황</div>
-        <button class="btn btn-primary" id="addStockBtn" onclick="toggleAddForm()">+ 종목 추가</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-ghost" id="refreshPriceBtn" onclick="refreshNaverPrices()" style="padding:7px 14px;font-size:12px;border-radius:7px;color:#06b6d4;border-color:#06b6d444">📡 현재가 갱신</button>
+          <button class="btn btn-primary" id="addStockBtn" onclick="toggleAddForm()">+ 종목 추가</button>
+        </div>
       </div>
       <div id="addStockForm" style="display:none">
         <div class="form-row">
           <input class="form-input" id="f-name" placeholder="종목명 *" style="width:120px">
-          <input class="form-input" id="f-code" placeholder="종목코드" style="width:100px">
+          <input class="form-input" id="f-code" placeholder="종목코드 (6자리)" style="width:130px">
           <input class="form-input" id="f-buy" type="number" placeholder="매입가 *" style="width:110px">
           <input class="form-input" id="f-cur" type="number" placeholder="현재가 *" style="width:110px">
           <input class="form-input" id="f-qty" type="number" placeholder="수량 *" style="width:80px">
@@ -323,7 +326,6 @@ let reportComments = {}; // { reportId: [ { id, author, content, createdAt } ] }
 let presentations = []; // [ { id, name, url, uploadedAt, type } ]
 let announcements = []; // [ { id, author, title, content, createdAt } ]
 let boardPosts = []; // [ { id, author, title, content, createdAt, files:[{id,name,url,type,uploadedAt}] } ]
-let dartCorpCodes = {}; // { 기업명: corp_code }
 let annualData = {}; // { 기업명: [{ id, year, revenue, opProfit, netProfit }] } max 5
 let quarterlyData = {}; // { 기업명: [{ id, quarter, revenue, opProfit, netProfit }] } max 8
 let selectedCompany = null;
@@ -384,7 +386,7 @@ function updateNewBadges() {
 
 function saveToFirebase() {
   if (isRemoteUpdate) return;
-  const data = { portfolio, returnsData, financials, companyDocs, companyNotes, reports, reportComments, presentations, announcements, boardPosts, annualData, quarterlyData, dartCorpCodes, updatedAt: Date.now() };
+  const data = { portfolio, returnsData, financials, companyDocs, companyNotes, reports, reportComments, presentations, announcements, boardPosts, annualData, quarterlyData, updatedAt: Date.now() };
   dbRef.set(data);
   showSaveStatus();
   updateNewBadges();
@@ -418,7 +420,6 @@ dbRef.on("value", (snapshot) => {
   boardPosts = data.boardPosts || [];
   annualData = data.annualData || {};
   quarterlyData = data.quarterlyData || {};
-  dartCorpCodes = data.dartCorpCodes || {};
   reportComments = data.reportComments || {};
   presentations = data.presentations || [];
   announcements = data.announcements || [];
@@ -551,8 +552,9 @@ function renderPortfolioTable() {
       <td colspan="10" style="padding:12px 8px">
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <span style="font-size:12px;color:#64748b;min-width:60px">${p.name}</span>
-          <input id="e-buy-${p.id}" type="number" value="${p.buyPrice}" placeholder="매입가" class="form-input" style="width:120px">
-          <input id="e-cur-${p.id}" type="number" value="${p.currentPrice}" placeholder="현재가" class="form-input" style="width:120px">
+          <input id="e-code-${p.id}" value="${p.code||''}" placeholder="종목코드(6자리)" class="form-input" style="width:130px">
+          <input id="e-buy-${p.id}" type="number" value="${p.buyPrice}" placeholder="매입가" class="form-input" style="width:110px">
+          <input id="e-cur-${p.id}" type="number" value="${p.currentPrice}" placeholder="현재가" class="form-input" style="width:110px">
           <input id="e-qty-${p.id}" type="number" value="${p.qty}" placeholder="수량" class="form-input" style="width:90px">
           <button class="btn btn-success" style="padding:6px 16px;font-size:12px" onclick="saveStockEdit(${p.id})">저장</button>
           <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="toggleEditRow(${p.id})">취소</button>
@@ -569,12 +571,14 @@ function toggleEditRow(id) {
 }
 
 function saveStockEdit(id) {
+  const code = document.getElementById("e-code-" + id).value.trim();
   const buy = Number(document.getElementById("e-buy-" + id).value);
   const cur = Number(document.getElementById("e-cur-" + id).value);
   const qty = Number(document.getElementById("e-qty-" + id).value);
   if (!buy || !cur || !qty) return alert("값을 모두 입력해주세요.");
   const p = portfolio.find(p => p.id === id);
   if (!p) return;
+  p.code = code;
   p.buyPrice = buy;
   p.currentPrice = cur;
   p.qty = qty;
@@ -719,6 +723,69 @@ function removeStock(id) {
   portfolio = portfolio.filter(p => p.id !== id);
   renderPortfolio();
   saveToFirebase();
+}
+
+// ── 네이버 현재가 갱신 ─────────────────────────────────────────────────────
+async function refreshNaverPrices() {
+  const btn = document.getElementById("refreshPriceBtn");
+  const targets = portfolio.filter(p => p.code && p.code.trim());
+  if (!targets.length) {
+    alert("종목코드(6자리)가 입력된 종목이 없습니다.\n수정 버튼으로 종목코드를 먼저 입력해주세요.");
+    return;
+  }
+
+  btn.textContent = "⏳ 갱신 중...";
+  btn.disabled = true;
+
+  try {
+    const results = await Promise.all(
+      targets.map(async p => {
+        const res = await fetch(
+          `https://m.stock.naver.com/api/stock/${p.code.trim()}/basic`,
+          { headers: { "User-Agent": "Mozilla/5.0" } }
+        );
+        if (!res.ok) return { code: p.code, price: null };
+        const data = await res.json();
+        const price = parseInt((data.closePrice || "").replace(/,/g, ""), 10);
+        return { code: p.code, price: isNaN(price) ? null : price };
+      })
+    );
+
+    let updated = 0;
+    results.forEach(({ code, price }) => {
+      if (price == null) return;
+      portfolio.forEach(p => {
+        if (p.code?.trim() === code) { p.currentPrice = price; updated++; }
+      });
+    });
+
+    if (updated === 0) throw new Error("갱신된 종목 없음 — 종목코드를 확인해주세요");
+
+    renderPortfolio();
+    saveToFirebase();
+
+    btn.textContent = `✓ ${updated}개 갱신 완료`;
+    btn.style.color = "#22c55e";
+    btn.style.borderColor = "#22c55e44";
+    setTimeout(() => {
+      btn.textContent = "📡 현재가 갱신";
+      btn.disabled = false;
+      btn.style.color = "";
+      btn.style.borderColor = "";
+    }, 3000);
+
+  } catch (e) {
+    btn.textContent = "✗ 갱신 실패";
+    btn.style.color = "#ef4444";
+    btn.style.borderColor = "#ef444444";
+    setTimeout(() => {
+      btn.textContent = "📡 현재가 갱신";
+      btn.disabled = false;
+      btn.style.color = "";
+      btn.style.borderColor = "";
+    }, 3000);
+    console.error("[현재가 갱신]", e.message);
+  }
 }
 
 function renderPortfolio() {
