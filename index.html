@@ -113,6 +113,80 @@
   /* 사용자 목록 */
   .users-bar { display:flex; gap:8px; align-items:center; }
   .user-dot { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#fff; border:2px solid #0a0e17; }
+
+  /* ── 모바일 반응형 ──────────────────────────────────────────────── */
+  @media (max-width: 768px) {
+    /* 헤더 */
+    .header { padding:12px 16px; gap:8px; }
+    .time-section { gap:8px; }
+    .time-date { display:none; }
+
+    /* 탭 */
+    .tabs { padding:0 8px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+    .tabs::-webkit-scrollbar { display:none; }
+    .tab-btn { padding:12px 14px; font-size:13px; white-space:nowrap; flex-shrink:0; }
+
+    /* 콘텐츠 */
+    .content { padding:16px; }
+
+    /* 카드 그리드 */
+    .cards-row { gap:10px; }
+    .card { min-width:calc(50% - 5px); padding:14px; flex:1 1 calc(50% - 5px); }
+    .card-value { font-size:18px; }
+
+    /* 차트 */
+    .charts-row { flex-direction:column; gap:12px; }
+    .chart-card.flex2, .chart-card.flex1 { min-width:100%; flex:none; }
+
+    /* 테이블 카드 */
+    .table-card { padding:14px; }
+    .table-header { gap:8px; }
+    .table-title { font-size:13px; }
+
+    /* 버튼 축소 */
+    .btn { padding:7px 12px; font-size:12px; }
+
+    /* 폼 */
+    .form-row { padding:12px; gap:8px; }
+    .form-input { font-size:13px; }
+
+    /* 기업 분석 그리드 */
+    .company-grid { grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:8px; }
+    .company-card { padding:12px; }
+    .company-card-name { font-size:14px; }
+
+    /* 요약 카드 */
+    .summary-name { font-size:17px; }
+    .summary-card { padding:14px; }
+
+    /* 푸터 */
+    .footer { padding:12px 16px; }
+
+    /* 헤더 버튼 숨김 (백업/복원은 모바일에서 최소화) */
+    .header > div:nth-child(2) { display:none; }
+  }
+
+  /* 모바일에서 포트폴리오 테이블 — 덜 중요한 컬럼 숨김 */
+  @media (max-width: 640px) {
+    .col-hide-mobile { display:none; }
+  }
+
+  @media (max-width: 480px) {
+    /* 카드 한 줄에 2개 유지, 값 더 축소 */
+    .card-value { font-size:16px; }
+    .card-label { font-size:11px; }
+
+    /* 탭 텍스트 아이콘만 */
+    .tab-btn { padding:12px 10px; font-size:12px; gap:4px; }
+
+    /* 테이블 헤더 일부 숨김은 JS로 처리하므로 overflow만 */
+    table { font-size:12px; }
+    th, td { padding:8px 8px; }
+
+    /* 종목 추가 폼 입력 풀 너비 */
+    .form-row .form-input { width:100% !important; }
+    .form-row { flex-direction:column; }
+  }
 </style>
 </head>
 <body>
@@ -177,7 +251,7 @@
       </div>
       <div style="overflow-x:auto">
         <table>
-          <thead><tr><th>종목명</th><th>코드</th><th>매입가</th><th>현재가</th><th>수량</th><th>평가액</th><th>수익률</th><th>수익금</th><th>비중</th><th></th></tr></thead>
+          <thead><tr><th>종목명</th><th class="col-hide-mobile">코드</th><th class="col-hide-mobile">매입가</th><th>현재가</th><th class="col-hide-mobile">수량</th><th>평가액</th><th>수익률</th><th class="col-hide-mobile">수익금</th><th class="col-hide-mobile">비중</th><th></th></tr></thead>
           <tbody id="portfolioTable"></tbody>
         </table>
       </div>
@@ -535,14 +609,14 @@ function renderPortfolioTable() {
     return `
     <tr id="row-${p.id}">
       <td style="font-weight:600">${p.name} ${makeBadge(p.sector,"#3b82f6")}</td>
-      <td style="color:#64748b;font-family:monospace;font-size:12px">${p.code}</td>
-      <td>₩${fmt(p.buyPrice)}</td>
+      <td class="col-hide-mobile" style="color:#64748b;font-family:monospace;font-size:12px">${p.code}</td>
+      <td class="col-hide-mobile">₩${fmt(p.buyPrice)}</td>
       <td class="${cls}" style="font-weight:600">₩${fmt(p.currentPrice)}</td>
-      <td>${fmt(p.qty)}주</td>
+      <td class="col-hide-mobile">${fmt(p.qty)}주</td>
       <td style="font-weight:500">₩${fmt(evalAmt)}</td>
       <td class="${cls}" style="font-weight:700">${ret>0?'+':''}${ret}%</td>
-      <td class="${cls}">${profit>=0?'+':''}₩${fmt(profit)}</td>
-      <td style="color:#64748b">${weight}%</td>
+      <td class="col-hide-mobile ${cls}">${profit>=0?'+':''}₩${fmt(profit)}</td>
+      <td class="col-hide-mobile" style="color:#64748b">${weight}%</td>
       <td style="white-space:nowrap">
         <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;border-radius:6px" onclick="toggleEditRow(${p.id})">수정</button>
         <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;border-radius:6px;margin-left:4px" onclick="removeStock(${p.id})">삭제</button>
