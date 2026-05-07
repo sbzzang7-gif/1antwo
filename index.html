@@ -1,0 +1,1790 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>잃않투 Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#0a0e17; color:#e2e8f0; font-family:'Inter','Pretendard',-apple-system,sans-serif; min-height:100vh; }
+  ::-webkit-scrollbar { width:6px; height:6px; }
+  ::-webkit-scrollbar-track { background:#111827; }
+  ::-webkit-scrollbar-thumb { background:#334155; border-radius:3px; }
+
+  .header { background:#111827; border-bottom:1px solid #1e293b; padding:14px 32px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; }
+  .logo { font-size:20px; font-weight:800; }
+  .logo span { color:#3b82f6; }
+  .badge { padding:2px 10px; border-radius:20px; font-size:12px; font-weight:600; display:inline-block; }
+  .badge-live { background:#22c55e22; color:#22c55e; }
+  .badge-sync { background:#3b82f622; color:#3b82f6; }
+  .badge-offline { background:#ef444422; color:#ef4444; }
+  .time-section { display:flex; align-items:center; gap:16px; }
+  .time-date { font-size:12px; color:#64748b; }
+  .time-clock { font-size:13px; font-family:monospace; font-weight:600; }
+  .dot-live { width:8px; height:8px; border-radius:50%; background:#22c55e; box-shadow:0 0 8px #22c55e; animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .tabs { background:#111827; border-bottom:1px solid #1e293b; padding:0 32px; display:flex; gap:0; }
+  .tab-btn { background:transparent; border:none; border-bottom:2px solid transparent; color:#64748b; padding:14px 24px; font-size:14px; cursor:pointer; display:flex; align-items:center; gap:8px; font-family:inherit; transition:all 0.2s; position:relative; }
+  .tab-btn:hover { color:#94a3b8; }
+  .tab-btn.active { color:#e2e8f0; border-bottom-color:#3b82f6; font-weight:600; }
+  .new-dot { display:none; width:8px; height:8px; background:#ef4444; border-radius:50%; box-shadow:0 0 6px #ef4444; flex-shrink:0; animation:pulse 2s infinite; }
+  .new-dot.show { display:inline-block; }
+
+  .content { padding:24px 32px; max-width:1400px; margin:0 auto; }
+  .tab-content { display:none; animation:fadeIn 0.3s ease-out; }
+  .tab-content.active { display:block; }
+
+  .cards-row { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:20px; }
+  .card { background:#111827; border:1px solid #1e293b; border-radius:12px; padding:20px; flex:1; min-width:150px; }
+  .card-label { font-size:12px; color:#64748b; margin-bottom:4px; }
+  .card-value { font-size:22px; font-weight:700; letter-spacing:-0.5px; }
+  .card-sub { font-size:11px; color:#64748b; margin-top:4px; }
+  .green { color:#22c55e; } .red { color:#ef4444; } .blue { color:#3b82f6; }
+  .cyan { color:#06b6d4; } .orange { color:#f59e0b; } .purple { color:#a855f7; }
+
+  .charts-row { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:20px; }
+  .chart-card { background:#111827; border:1px solid #1e293b; border-radius:12px; padding:20px; }
+  .chart-card.flex2 { flex:2; min-width:300px; }
+  .chart-card.flex1 { flex:1; min-width:250px; }
+  .chart-title { font-size:14px; font-weight:600; margin-bottom:12px; }
+  .chart-title span { color:#64748b; font-weight:400; }
+
+  .table-card { background:#111827; border:1px solid #1e293b; border-radius:12px; padding:20px; margin-bottom:20px; }
+  .table-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px; }
+  .table-title { font-size:14px; font-weight:600; }
+  .table-title span { color:#64748b; font-weight:400; }
+
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; padding:10px 12px; font-size:12px; color:#64748b; border-bottom:1px solid #1e293b; white-space:nowrap; font-weight:500; }
+  td { padding:12px; font-size:13px; border-bottom:1px solid #1e293b; }
+  tr:hover { background:#1a223544; }
+
+  .badge-sm { padding:2px 10px; border-radius:20px; font-size:11px; font-weight:600; display:inline-block; }
+
+  .btn { border:none; border-radius:8px; padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .btn:hover { opacity:0.85; }
+  .btn-primary { background:#3b82f6; color:#fff; }
+  .btn-danger { background:#ef4444; color:#fff; }
+  .btn-success { background:#22c55e; color:#fff; }
+  .btn-ghost { background:transparent; border:1px solid #1e293b; color:#64748b; }
+  .btn-ghost:hover { border-color:#334155; color:#94a3b8; }
+
+  .form-row { display:flex; gap:8px; flex-wrap:wrap; padding:16px; background:#0a0e17; border-radius:8px; margin-bottom:16px; align-items:center; }
+  .form-input { padding:8px 12px; border-radius:6px; border:1px solid #1e293b; background:#111827; color:#e2e8f0; font-size:13px; outline:none; font-family:inherit; }
+  .form-input:focus { border-color:#3b82f6; }
+  .form-input::placeholder { color:#475569; }
+
+  .search-wrap { position:relative; flex:1; min-width:200px; }
+  .search-icon { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#64748b; font-size:14px; }
+  .search-input { width:100%; padding:10px 16px 10px 36px; border-radius:8px; border:1px solid #1e293b; background:#0a0e17; color:#e2e8f0; font-size:14px; outline:none; font-family:inherit; }
+  .search-input:focus { border-color:#3b82f6; }
+
+  .company-btns { display:flex; gap:8px; flex-wrap:wrap; }
+  .company-btn { background:transparent; border:1px solid #1e293b; color:#64748b; border-radius:8px; padding:8px 16px; font-size:13px; cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .company-btn:hover { border-color:#334155; }
+  .company-btn.active { background:#3b82f6; border-color:#3b82f6; color:#fff; font-weight:600; }
+
+  .company-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:12px; margin-top:16px; }
+  .company-card { background:#0a0e17; border:1px solid #1e293b; border-radius:10px; padding:16px; cursor:pointer; transition:all 0.15s; }
+  .company-card:hover { border-color:#334155; transform:translateY(-1px); }
+  .company-card.active { border-color:#3b82f6; background:#3b82f611; }
+  .company-card-name { font-size:15px; font-weight:700; margin-bottom:8px; }
+  .company-card-meta { font-size:11px; color:#64748b; display:flex; flex-direction:column; gap:3px; }
+
+  .summary-card { background:#111827; border:1px solid #1e293b; border-radius:12px; padding:20px; margin-bottom:20px; }
+  .summary-name { font-size:20px; font-weight:700; margin-bottom:8px; }
+  .summary-desc { font-size:13px; color:#64748b; line-height:1.7; }
+
+  .footer { padding:16px 32px; border-top:1px solid #1e293b; text-align:center; font-size:11px; color:#64748b; }
+  .empty { text-align:center; padding:40px; color:#64748b; font-size:14px; }
+
+  /* 동기화 오버레이 */
+  #syncOverlay { position:fixed; inset:0; background:#0a0e17ee; z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; }
+  #syncOverlay .spinner { width:40px; height:40px; border:3px solid #1e293b; border-top-color:#3b82f6; border-radius:50%; animation:spin 0.8s linear infinite; }
+  #syncOverlay p { color:#64748b; font-size:14px; }
+
+  /* 사용자 목록 */
+  .users-bar { display:flex; gap:8px; align-items:center; }
+  .user-dot { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#fff; border:2px solid #0a0e17; }
+
+  /* ── 모바일 반응형 ──────────────────────────────────────────────── */
+  @media (max-width: 768px) {
+    /* 헤더 */
+    .header { padding:12px 16px; gap:8px; }
+    .time-section { gap:8px; }
+    .time-date { display:none; }
+
+    /* 탭 */
+    .tabs { padding:0 8px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+    .tabs::-webkit-scrollbar { display:none; }
+    .tab-btn { padding:12px 14px; font-size:13px; white-space:nowrap; flex-shrink:0; }
+
+    /* 콘텐츠 */
+    .content { padding:16px; }
+
+    /* 카드 그리드 */
+    .cards-row { gap:10px; }
+    .card { min-width:calc(50% - 5px); padding:14px; flex:1 1 calc(50% - 5px); }
+    .card-value { font-size:18px; }
+
+    /* 차트 */
+    .charts-row { flex-direction:column; gap:12px; }
+    .chart-card.flex2, .chart-card.flex1 { min-width:100%; flex:none; }
+
+    /* 테이블 카드 */
+    .table-card { padding:14px; }
+    .table-header { gap:8px; }
+    .table-title { font-size:13px; }
+
+    /* 버튼 축소 */
+    .btn { padding:7px 12px; font-size:12px; }
+
+    /* 폼 */
+    .form-row { padding:12px; gap:8px; }
+    .form-input { font-size:13px; }
+
+    /* 기업 분석 그리드 */
+    .company-grid { grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:8px; }
+    .company-card { padding:12px; }
+    .company-card-name { font-size:14px; }
+
+    /* 요약 카드 */
+    .summary-name { font-size:17px; }
+    .summary-card { padding:14px; }
+
+    /* 푸터 */
+    .footer { padding:12px 16px; }
+
+    /* 헤더 버튼 숨김 (백업/복원은 모바일에서 최소화) */
+    .header > div:nth-child(2) { display:none; }
+  }
+
+  /* 모바일에서 포트폴리오 테이블 — 덜 중요한 컬럼 숨김 */
+  @media (max-width: 640px) {
+    .col-hide-mobile { display:none; }
+  }
+
+  @media (max-width: 480px) {
+    /* 카드 한 줄에 2개 유지, 값 더 축소 */
+    .card-value { font-size:16px; }
+    .card-label { font-size:11px; }
+
+    /* 탭 텍스트 아이콘만 */
+    .tab-btn { padding:12px 10px; font-size:12px; gap:4px; }
+
+    /* 테이블 헤더 일부 숨김은 JS로 처리하므로 overflow만 */
+    table { font-size:12px; }
+    th, td { padding:8px 8px; }
+
+    /* 종목 추가 폼 입력 풀 너비 */
+    .form-row .form-input { width:100% !important; }
+    .form-row { flex-direction:column; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 동기화 대기 오버레이 -->
+<div id="syncOverlay">
+  <div class="spinner"></div>
+  <p>Firebase에 연결 중...</p>
+</div>
+
+<!-- Header -->
+<div class="header">
+  <div style="display:flex;align-items:center;gap:12px">
+    <div class="logo"><span>잃않투</span> Dashboard</div>
+    <div class="badge badge-live" id="connBadge">● 연결 중</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <button class="btn btn-ghost" style="padding:6px 12px;font-size:11px;border-radius:6px" onclick="exportData()">💾 백업</button>
+    <label class="btn btn-ghost" style="padding:6px 12px;font-size:11px;border-radius:6px;cursor:pointer">📂 복원<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
+    <span id="saveStatus" style="font-size:11px;color:#22c55e;opacity:0;transition:opacity 0.4s"></span>
+  </div>
+  <div class="time-section">
+    <span class="time-date" id="dateDisplay"></span>
+    <span class="time-clock" id="clockDisplay"></span>
+    <div class="dot-live"></div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab-btn active" data-tab="portfolio" onclick="switchTab('portfolio')">📊 포트폴리오</button>
+  <button class="tab-btn" data-tab="analysis" onclick="switchTab('analysis')">🔍 기업분석<span class="new-dot" id="badge-analysis"></span></button>
+  <button class="tab-btn" data-tab="presentations" onclick="switchTab('presentations')">📁 발표자료<span class="new-dot" id="badge-presentations"></span></button>
+  <button class="tab-btn" data-tab="notice" onclick="switchTab('notice')">📢 공지사항<span class="new-dot" id="badge-notice"></span></button>
+  <button class="tab-btn" data-tab="board" onclick="switchTab('board')">💬 자유게시판<span class="new-dot" id="badge-board"></span></button>
+</div>
+
+<!-- Content -->
+<div class="content">
+
+  <!-- ═══ Portfolio Tab ═══ -->
+  <div class="tab-content active" id="tab-portfolio">
+    <div class="cards-row" id="portfolio-stats"></div>
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-title">보유 종목 현황</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-ghost" id="refreshPriceBtn" onclick="refreshNaverPrices()" style="padding:7px 14px;font-size:12px;border-radius:7px;color:#06b6d4;border-color:#06b6d444">📡 현재가 갱신</button>
+          <button class="btn btn-primary" id="addStockBtn" onclick="toggleAddForm()">+ 종목 추가</button>
+        </div>
+      </div>
+      <div id="addStockForm" style="display:none">
+        <div class="form-row">
+          <input class="form-input" id="f-name" placeholder="종목명 *" style="width:120px">
+          <input class="form-input" id="f-code" placeholder="종목코드 (6자리)" style="width:130px">
+          <input class="form-input" id="f-buy" type="number" placeholder="매입가 *" style="width:110px">
+          <input class="form-input" id="f-cur" type="number" placeholder="현재가 *" style="width:110px">
+          <input class="form-input" id="f-qty" type="number" placeholder="수량 *" style="width:80px">
+          <input class="form-input" id="f-sector" placeholder="섹터" style="width:100px">
+          <button class="btn btn-success" onclick="addStock()">추가</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>종목명</th><th class="col-hide-mobile">코드</th><th class="col-hide-mobile">매입가</th><th>현재가</th><th class="col-hide-mobile">수량</th><th>평가액</th><th>수익률</th><th class="col-hide-mobile">수익금</th><th class="col-hide-mobile">비중</th><th></th></tr></thead>
+          <tbody id="portfolioTable"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="charts-row">
+      <div class="chart-card flex2">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+          <div class="chart-title" style="margin-bottom:0">포트폴리오 월별 수익률 추이 <span>(26.03~)</span></div>
+          <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px;border-radius:6px" id="addReturnBtn" onclick="toggleReturnForm()">+ 월별 수익률 추가</button>
+        </div>
+        <div id="addReturnForm" style="display:none;margin-bottom:12px">
+          <div class="form-row" style="padding:12px">
+            <select class="form-input" id="r-year" style="width:90px">
+              <option value="26">2026</option><option value="27">2027</option><option value="28">2028</option>
+            </select>
+            <select class="form-input" id="r-month" style="width:80px">
+              <option value="03">3월</option><option value="04">4월</option><option value="05">5월</option><option value="06">6월</option>
+              <option value="07">7월</option><option value="08">8월</option><option value="09">9월</option>
+              <option value="10">10월</option><option value="11">11월</option><option value="12">12월</option>
+            </select>
+            <input class="form-input" id="r-value" type="number" step="0.1" placeholder="수익률 (%)" style="width:120px">
+            <button class="btn btn-success" style="padding:6px 16px;font-size:12px" onclick="addMonthlyReturn()">추가</button>
+            <button class="btn btn-ghost" style="padding:6px 12px;font-size:11px;border-radius:6px;color:#ef4444;border-color:#ef444444" onclick="removeLastReturn()">마지막 삭제</button>
+          </div>
+        </div>
+        <canvas id="returnsChart" height="100"></canvas>
+        <div id="returnsDataList" style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap"></div>
+      </div>
+      <div class="chart-card flex1">
+        <div class="chart-title">섹터별 자산 배분</div>
+        <canvas id="sectorChart" height="130"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Presentations Tab ═══ -->
+  <div class="tab-content" id="tab-presentations">
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-title">발표자료 <span id="presCount" style="color:#64748b;font-weight:400"></span></div>
+        <label id="uploadPresBtn" class="btn btn-primary" style="padding:8px 14px;font-size:12px;cursor:pointer">
+          <span id="uploadPresBtnText">+ 파일 업로드</span>
+          <input type="file" accept=".pdf,.pptx,.ppt" style="display:none" onchange="uploadPresentation(this)">
+        </label>
+      </div>
+      <div id="presentationsList"><div class="empty">업로드된 발표자료가 없습니다.</div></div>
+    </div>
+  </div>
+
+  <!-- ═══ Notice Tab ═══ -->
+  <div class="tab-content" id="tab-notice">
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-title">공지사항 <span id="noticeCount" style="color:#64748b;font-weight:400"></span></div>
+        <button class="btn btn-primary" style="padding:8px 14px;font-size:12px" onclick="toggleNoticeForm()">✏️ 글쓰기</button>
+      </div>
+      <div id="noticeForm" style="display:none;margin-bottom:16px;padding:16px;background:#0a0e17;border-radius:8px">
+        <input class="form-input" id="n-author" placeholder="작성자 *" style="width:140px;margin-bottom:8px">
+        <input class="form-input" id="n-title" placeholder="제목 *" style="width:100%;margin-bottom:8px;display:block">
+        <textarea id="n-content" placeholder="내용을 입력하세요..." style="width:100%;height:120px;padding:10px 12px;border-radius:6px;border:1px solid #1e293b;background:#111827;color:#e2e8f0;font-size:13px;font-family:inherit;outline:none;resize:vertical;display:block;margin-bottom:8px"></textarea>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-success" style="padding:7px 20px;font-size:13px" onclick="submitNotice()">등록</button>
+          <button class="btn btn-ghost" style="padding:7px 14px;font-size:13px" onclick="toggleNoticeForm()">취소</button>
+        </div>
+      </div>
+      <div id="noticeList"><div class="empty">등록된 공지사항이 없습니다.</div></div>
+    </div>
+  </div>
+
+  <!-- ═══ Board Tab ═══ -->
+  <div class="tab-content" id="tab-board">
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-title">자유게시판 <span id="boardCount" style="color:#64748b;font-weight:400"></span></div>
+        <button class="btn btn-primary" style="padding:8px 14px;font-size:12px" onclick="toggleBoardForm()">✏️ 글쓰기</button>
+      </div>
+      <div id="boardForm" style="display:none;margin-bottom:16px;padding:16px;background:#0a0e17;border-radius:8px">
+        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <input class="form-input" id="bd-author" placeholder="작성자 *" style="width:140px">
+          <input class="form-input" id="bd-title"  placeholder="제목 *" style="flex:1;min-width:200px">
+        </div>
+        <textarea id="bd-content" placeholder="내용을 입력하세요..." style="width:100%;height:120px;padding:10px 12px;border-radius:6px;border:1px solid #1e293b;background:#111827;color:#e2e8f0;font-size:13px;font-family:inherit;outline:none;resize:vertical;display:block;margin-bottom:8px"></textarea>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-success" style="padding:7px 20px;font-size:13px" onclick="submitBoardPost()">등록</button>
+          <label class="btn btn-ghost" style="padding:7px 14px;font-size:13px;cursor:pointer">
+            <span id="bdFileText">📎 파일 첨부</span>
+            <input type="file" id="bdFileInput" multiple accept=".pdf,.md,.docx,.doc,.pptx,.xlsx,.png,.jpg,.jpeg" style="display:none" onchange="previewBoardFiles()">
+          </label>
+          <button class="btn btn-ghost" style="padding:7px 14px;font-size:13px" onclick="toggleBoardForm()">취소</button>
+        </div>
+        <div id="bdFilePreview" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
+      <div id="boardList"><div class="empty">등록된 게시물이 없습니다.</div></div>
+    </div>
+  </div>
+
+  <!-- ═══ Analysis Tab ═══ -->
+  <div class="tab-content" id="tab-analysis">
+    <div class="table-card" style="margin-bottom:20px">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between">
+        <div class="search-wrap" style="max-width:280px">
+          <span class="search-icon">🔍</span>
+          <input class="search-input" id="companySearch" placeholder="기업명 검색..." oninput="filterCompanies()">
+        </div>
+        <button class="btn btn-primary" style="padding:8px 14px;font-size:12px" onclick="toggleAddCompanyForm()">+ 기업 추가</button>
+      </div>
+      <div id="addCompanyForm" style="display:none;margin-top:12px">
+        <div class="form-row" style="padding:12px;flex-wrap:wrap">
+          <input class="form-input" id="c-name" placeholder="기업명 *" style="width:180px">
+          <button class="btn btn-success" style="padding:8px 16px;font-size:12px" onclick="addCompany()">추가</button>
+        </div>
+      </div>
+      <div class="company-grid" id="companyGrid"></div>
+    </div>
+    <div id="analysisContent"></div>
+  </div>
+
+</div>
+
+<div class="footer">잃않투 Dashboard · Firebase 실시간 동기화 · 모든 변경사항이 공유됩니다</div>
+
+<script>
+// ─── Firebase 초기화 ───
+const firebaseConfig = {
+  apiKey: "AIzaSyDC43J79tynNdxUTE3_EB7E0rWKwbVDiuo",
+  authDomain: "beensight.firebaseapp.com",
+  databaseURL: "https://beensight-default-rtdb.firebaseio.com",
+  projectId: "beensight",
+  storageBucket: "beensight.firebasestorage.app",
+  messagingSenderId: "25169288344",
+  appId: "1:25169288344:web:fde0e993d2fb78a9bdc4ed"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const dbRef = db.ref("dashboard");
+const storage = firebase.storage();
+
+// ─── 로컬 상태 ───
+let portfolio = [];
+let returnsData = { labels:[], data:[] };
+let financials = {};
+let companyDocs = {}; // { 기업명: [ { id, name, url, uploadedAt, type } ] }
+let companyNotes = {}; // { 기업명: [ { id, author, title, content, createdAt } ] }
+let reports = {}; // { 기업명: [ { id, name, url, uploadedAt } ] }
+let reportComments = {}; // { reportId: [ { id, author, content, createdAt } ] }
+let presentations = []; // [ { id, name, url, uploadedAt, type } ]
+let announcements = []; // [ { id, author, title, content, createdAt } ]
+let boardPosts = []; // [ { id, author, title, content, createdAt, files:[{id,name,url,type,uploadedAt}] } ]
+let annualData = {}; // { 기업명: [{ id, year, revenue, opProfit, netProfit }] } max 5
+let quarterlyData = {}; // { 기업명: [{ id, quarter, revenue, opProfit, netProfit }] } max 8
+let selectedCompany = null;
+let charts = {};
+let isRemoteUpdate = false; // Firebase에서 받은 업데이트 중 재저장 방지
+
+// ─── 기본 샘플 데이터 (최초 1회) ───
+const DEFAULT_DATA = {
+  portfolio: [
+    { id:1, name:"삼성전자", code:"005930", buyPrice:65000, currentPrice:72000, qty:100, sector:"반도체" },
+    { id:2, name:"SK하이닉스", code:"000660", buyPrice:180000, currentPrice:195000, qty:30, sector:"반도체" },
+    { id:3, name:"NAVER", code:"035420", buyPrice:350000, currentPrice:380000, qty:20, sector:"IT" },
+    { id:4, name:"카카오", code:"035720", buyPrice:55000, currentPrice:48000, qty:50, sector:"IT" },
+    { id:5, name:"현대차", code:"005380", buyPrice:230000, currentPrice:255000, qty:15, sector:"자동차" },
+  ],
+  returnsData: { labels:[], data:[] },
+  financials: {
+    "삼성전자": { per:12.3, pbr:1.2, roe:9.8, debt:28.5, rev:[302231,258935,300870,320150], op:[43377,6567,32720,45800], years:["2022","2023","2024","2025"], desc:"글로벌 반도체 1위 기업. 메모리, 파운드리, 모바일, 디스플레이 사업 영위." },
+    "SK하이닉스": { per:8.5, pbr:1.8, roe:21.2, debt:45.3, rev:[446216,327533,661792,720000], op:[70050,-77430,234870,260000], years:["2022","2023","2024","2025"], desc:"HBM 시장 글로벌 1위. AI 반도체 수요 급증에 따른 실적 턴어라운드 달성." },
+  }
+};
+
+// ─── Utils ───
+const fmt = n => n.toLocaleString("ko-KR");
+const pctCalc = (b,c) => (((c-b)/b)*100).toFixed(1);
+function makeBadge(text, color) {
+  return `<span class="badge-sm" style="background:${color}22;color:${color}">${text}</span>`;
+}
+
+// ─── Firebase 저장 ───
+// ─── 새 콘텐츠 뱃지 (36시간) ───
+function updateNewBadges() {
+  const LIMIT = 36 * 60 * 60 * 1000;
+  const now   = Date.now();
+  const isNew = t => t && (now - t) < LIMIT;
+
+  // 기업분석: 글 / 파일 / 애널리스트 리포트
+  const analysisNew =
+    Object.values(companyNotes).flat().some(n => isNew(n.createdAt)) ||
+    Object.values(companyDocs).flat().some(d => isNew(d.uploadedAt)) ||
+    Object.values(reports).flat().some(r => isNew(r.uploadedAt));
+
+  // 발표자료
+  const presNew = presentations.some(p => isNew(p.uploadedAt));
+
+  // 공지사항
+  const noticeNew = announcements.some(a => isNew(a.createdAt));
+
+  // 자유게시판
+  const boardNew = boardPosts.some(p => isNew(p.createdAt));
+
+  const map = { analysis: analysisNew, presentations: presNew, notice: noticeNew, board: boardNew };
+  Object.entries(map).forEach(([tab, hasNew]) => {
+    const el = document.getElementById("badge-" + tab);
+    if (el) el.classList.toggle("show", hasNew);
+  });
+}
+
+function saveToFirebase() {
+  if (isRemoteUpdate) return;
+  const data = { portfolio, returnsData, financials, companyDocs, companyNotes, reports, reportComments, presentations, announcements, boardPosts, annualData, quarterlyData, updatedAt: Date.now() };
+  dbRef.set(data);
+  showSaveStatus();
+  updateNewBadges();
+}
+
+function showSaveStatus() {
+  const el = document.getElementById("saveStatus");
+  el.textContent = "☁️ 동기화됨";
+  el.style.opacity = "1";
+  setTimeout(() => { el.style.opacity = "0"; }, 2000);
+}
+
+// ─── Firebase 실시간 리스너 ───
+let firstLoad = true;
+dbRef.on("value", (snapshot) => {
+  const data = snapshot.val();
+
+  if (!data) {
+    // Firebase가 비어있으면 샘플 데이터 업로드
+    dbRef.set({ ...DEFAULT_DATA, updatedAt: Date.now() });
+    return;
+  }
+
+  isRemoteUpdate = true;
+  portfolio = data.portfolio || [];
+  returnsData = data.returnsData || { labels:[], data:[] };
+  financials = data.financials || {};
+  companyDocs = data.companyDocs || {};
+  companyNotes = data.companyNotes || {};
+  reports = data.reports || {};
+  boardPosts = data.boardPosts || [];
+  annualData = data.annualData || {};
+  quarterlyData = data.quarterlyData || {};
+  reportComments = data.reportComments || {};
+  presentations = data.presentations || [];
+  announcements = data.announcements || [];
+  if (!selectedCompany || !financials[selectedCompany]) {
+    selectedCompany = Object.keys(financials)[0] || null;
+  }
+
+  renderPortfolio();
+  renderReturnDataList();
+  renderNotices();
+  renderBoard();
+  updateNewBadges();
+
+  if (firstLoad) {
+    document.getElementById("syncOverlay").style.display = "none";
+    firstLoad = false;
+  }
+
+  isRemoteUpdate = false;
+}, (error) => {
+  console.error("Firebase 오류:", error);
+  document.getElementById("syncOverlay").innerHTML = `<p style="color:#ef4444">연결 실패: ${error.message}</p>`;
+});
+
+// ─── 연결 상태 표시 ───
+db.ref(".info/connected").on("value", (snap) => {
+  const badge = document.getElementById("connBadge");
+  if (snap.val()) {
+    badge.textContent = "● 실시간 동기화 중";
+    badge.className = "badge badge-live";
+  } else {
+    badge.textContent = "● 오프라인";
+    badge.className = "badge badge-offline";
+  }
+});
+
+// ─── JSON 백업/복원 ───
+function exportData() {
+  const data = { portfolio, returnsData, financials, exportedAt: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type:"application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `잃않투-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.portfolio) portfolio = data.portfolio;
+      if (data.returnsData) returnsData = data.returnsData;
+      if (data.financials) financials = data.financials;
+      saveToFirebase();
+      alert("복원 완료! 모든 사용자에게 동기화됩니다.");
+    } catch(err) { alert("잘못된 파일 형식입니다."); }
+  };
+  reader.readAsText(file);
+  event.target.value = "";
+}
+
+// ─── Clock ───
+function updateClock() {
+  const now = new Date();
+  document.getElementById("dateDisplay").textContent = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,"0")}.${String(now.getDate()).padStart(2,"0")}`;
+  document.getElementById("clockDisplay").textContent = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}:${String(now.getSeconds()).padStart(2,"0")}`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ─── Tab ───
+function switchTab(id) {
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === id));
+  document.querySelectorAll(".tab-content").forEach(c => c.classList.toggle("active", c.id === "tab-" + id));
+  if (id === "analysis") renderAnalysis();
+  if (id === "presentations") renderPresentations();
+  if (id === "notice") renderNotices();
+  if (id === "board") renderBoard();
+}
+
+// ─── Portfolio ───
+function getPortfolioStats() {
+  const inv = portfolio.reduce((s,p) => s + p.buyPrice * p.qty, 0);
+  const cur = portfolio.reduce((s,p) => s + p.currentPrice * p.qty, 0);
+  const ret = cur - inv;
+  const pct = inv > 0 ? ((ret / inv) * 100).toFixed(1) : "0.0";
+  return { inv, cur, ret, pct };
+}
+
+function renderPortfolioStats() {
+  const s = getPortfolioStats();
+  document.getElementById("portfolio-stats").innerHTML = `
+    <div class="card"><div class="card-label">총 평가액</div><div class="card-value">₩${fmt(s.cur)}</div></div>
+    <div class="card"><div class="card-label">총 수익률</div><div class="card-value ${s.pct>=0?'green':'red'}">${s.pct>0?'+':''}${s.pct}%</div></div>
+    <div class="card"><div class="card-label">총 수익금</div><div class="card-value ${s.ret>=0?'green':'red'}">${s.ret>=0?'+':''}₩${fmt(s.ret)}</div></div>
+    <div class="card"><div class="card-label">총 투자금</div><div class="card-value">₩${fmt(s.inv)}</div></div>
+  `;
+}
+
+function renderPortfolioTable() {
+  const s = getPortfolioStats();
+  document.getElementById("portfolioTable").innerHTML = portfolio.map(p => {
+    const ret = pctCalc(p.buyPrice, p.currentPrice);
+    const profit = (p.currentPrice - p.buyPrice) * p.qty;
+    const evalAmt = p.currentPrice * p.qty;
+    const weight = s.cur > 0 ? ((evalAmt / s.cur) * 100).toFixed(1) : "0.0";
+    const cls = ret >= 0 ? "green" : "red";
+    return `
+    <tr id="row-${p.id}">
+      <td style="font-weight:600">${p.name} ${makeBadge(p.sector,"#3b82f6")}</td>
+      <td class="col-hide-mobile" style="color:#64748b;font-family:monospace;font-size:12px">${p.code}</td>
+      <td class="col-hide-mobile">₩${fmt(p.buyPrice)}</td>
+      <td class="${cls}" style="font-weight:600">₩${fmt(p.currentPrice)}</td>
+      <td class="col-hide-mobile">${fmt(p.qty)}주</td>
+      <td style="font-weight:500">₩${fmt(evalAmt)}</td>
+      <td class="${cls}" style="font-weight:700">${ret>0?'+':''}${ret}%</td>
+      <td class="col-hide-mobile ${cls}">${profit>=0?'+':''}₩${fmt(profit)}</td>
+      <td class="col-hide-mobile" style="color:#64748b">${weight}%</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;border-radius:6px" onclick="toggleEditRow(${p.id})">수정</button>
+        <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;border-radius:6px;margin-left:4px" onclick="removeStock(${p.id})">삭제</button>
+      </td>
+    </tr>
+    <tr id="edit-${p.id}" style="display:none;background:#111827">
+      <td colspan="10" style="padding:12px 8px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:12px;color:#64748b;min-width:60px">${p.name}</span>
+          <input id="e-code-${p.id}" value="${p.code||''}" placeholder="종목코드(6자리)" class="form-input" style="width:130px">
+          <input id="e-buy-${p.id}" type="number" value="${p.buyPrice}" placeholder="매입가" class="form-input" style="width:110px">
+          <input id="e-cur-${p.id}" type="number" value="${p.currentPrice}" placeholder="현재가" class="form-input" style="width:110px">
+          <input id="e-qty-${p.id}" type="number" value="${p.qty}" placeholder="수량" class="form-input" style="width:90px">
+          <button class="btn btn-success" style="padding:6px 16px;font-size:12px" onclick="saveStockEdit(${p.id})">저장</button>
+          <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="toggleEditRow(${p.id})">취소</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+function toggleEditRow(id) {
+  const editRow = document.getElementById("edit-" + id);
+  if (!editRow) return;
+  editRow.style.display = editRow.style.display === "none" ? "table-row" : "none";
+}
+
+function saveStockEdit(id) {
+  const code = document.getElementById("e-code-" + id).value.trim();
+  const buy = Number(document.getElementById("e-buy-" + id).value);
+  const cur = Number(document.getElementById("e-cur-" + id).value);
+  const qty = Number(document.getElementById("e-qty-" + id).value);
+  if (!buy || !cur || !qty) return alert("값을 모두 입력해주세요.");
+  const p = portfolio.find(p => p.id === id);
+  if (!p) return;
+  p.code = code;
+  p.buyPrice = buy;
+  p.currentPrice = cur;
+  p.qty = qty;
+  renderPortfolio();
+  saveToFirebase();
+}
+
+function toggleReturnForm() {
+  const form = document.getElementById("addReturnForm");
+  const btn = document.getElementById("addReturnBtn");
+  const show = form.style.display === "none";
+  form.style.display = show ? "block" : "none";
+  btn.textContent = show ? "✕ 닫기" : "+ 월별 수익률 추가";
+  if (show) updateMonthOptions();
+}
+
+function updateMonthOptions() {
+  const yearSel = document.getElementById("r-year");
+  const monthSel = document.getElementById("r-month");
+  let nextY, nextM;
+  if (returnsData.labels.length === 0) { nextY = 26; nextM = 3; }
+  else {
+    const last = returnsData.labels[returnsData.labels.length - 1];
+    const [ly, lm] = last.split(".").map(Number);
+    nextY = lm === 12 ? ly+1 : ly;
+    nextM = lm === 12 ? 1 : lm+1;
+  }
+  yearSel.value = String(nextY);
+  monthSel.innerHTML = "";
+  for (let m = nextM; m <= 12; m++) {
+    const opt = document.createElement("option");
+    opt.value = String(m).padStart(2,"0");
+    opt.textContent = m + "월";
+    monthSel.appendChild(opt);
+  }
+}
+
+function addMonthlyReturn() {
+  const year = document.getElementById("r-year").value;
+  const month = document.getElementById("r-month").value;
+  const value = parseFloat(document.getElementById("r-value").value);
+  if (isNaN(value)) return alert("수익률을 입력해주세요.");
+  const label = `${year}.${month}`;
+  if (returnsData.labels.includes(label)) return alert("이미 해당 월 데이터가 있습니다.");
+  returnsData.labels.push(label);
+  returnsData.data.push(value);
+  document.getElementById("r-value").value = "";
+  updateMonthOptions();
+  renderReturnsChart();
+  renderReturnDataList();
+  saveToFirebase();
+}
+
+function removeLastReturn() {
+  if (returnsData.labels.length === 0) return alert("삭제할 데이터가 없습니다.");
+  returnsData.labels.pop();
+  returnsData.data.pop();
+  updateMonthOptions();
+  renderReturnsChart();
+  renderReturnDataList();
+  saveToFirebase();
+}
+
+function renderReturnDataList() {
+  const el = document.getElementById("returnsDataList");
+  el.innerHTML = returnsData.labels.map((l, i) => {
+    const v = returnsData.data[i];
+    const color = v > 0 ? "#22c55e" : v < 0 ? "#ef4444" : "#64748b";
+    return `<span style="background:${color}18;color:${color};padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;white-space:nowrap">${l}: ${v>0?'+':''}${v}%</span>`;
+  }).join("");
+}
+
+function renderReturnsChart() {
+  const ctx = document.getElementById("returnsChart").getContext("2d");
+  if (charts.returns) charts.returns.destroy();
+  if (returnsData.labels.length === 0) {
+    charts.returns = new Chart(ctx, { type:"line", data:{labels:[""],datasets:[{data:[0]}]}, options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{display:false},y:{display:false}}} });
+    return;
+  }
+  const colors = returnsData.data.map(v => v >= 0 ? "#22c55e" : "#ef4444");
+  charts.returns = new Chart(ctx, {
+    type: "line",
+    data: { labels: returnsData.labels, datasets: [{
+      label:"월별 수익률 (%)", data: returnsData.data,
+      borderColor:"#3b82f6", backgroundColor:"rgba(59,130,246,0.08)",
+      fill:true, tension:0.3, pointRadius:6,
+      pointBackgroundColor:colors, pointBorderColor:colors, pointBorderWidth:2, borderWidth:2,
+    }] },
+    options: {
+      responsive:true,
+      plugins: { legend:{display:false}, tooltip:{callbacks:{label:c=>`${c.parsed.y>0?'+':''}${c.parsed.y}%`}} },
+      scales: {
+        x:{ grid:{color:"#1e293b"}, ticks:{color:"#64748b",font:{size:11}} },
+        y:{ grid:{color:"#1e293b"}, ticks:{color:"#64748b",font:{size:11},callback:v=>(v>0?'+':'')+v+"%"}, suggestedMin:-5 }
+      }
+    }
+  });
+}
+
+function renderSectorChart() {
+  const map = {};
+  portfolio.forEach(p => { map[p.sector]=(map[p.sector]||0)+p.currentPrice*p.qty; });
+  const labels = Object.keys(map), data = Object.values(map);
+  const colors = ["#3b82f6","#22c55e","#f59e0b","#a855f7","#06b6d4","#ef4444"];
+  const ctx = document.getElementById("sectorChart").getContext("2d");
+  if (charts.sector) charts.sector.destroy();
+  charts.sector = new Chart(ctx, {
+    type:"doughnut",
+    data:{ labels, datasets:[{ data, backgroundColor:colors.slice(0,labels.length), borderWidth:0, hoverOffset:8 }] },
+    options:{ responsive:true, cutout:"55%", plugins:{
+      legend:{position:"bottom",labels:{color:"#64748b",font:{size:11},padding:12}},
+      tooltip:{callbacks:{label:ctx=>`${ctx.label}: ₩${fmt(ctx.parsed)}`}}
+    }}
+  });
+}
+
+function toggleAddForm() {
+  const form = document.getElementById("addStockForm");
+  const btn = document.getElementById("addStockBtn");
+  const show = form.style.display === "none";
+  form.style.display = show ? "block" : "none";
+  btn.textContent = show ? "✕ 취소" : "+ 종목 추가";
+  btn.className = show ? "btn btn-danger" : "btn btn-primary";
+}
+
+function addStock() {
+  const name = document.getElementById("f-name").value.trim();
+  const code = document.getElementById("f-code").value.trim();
+  const buy = Number(document.getElementById("f-buy").value);
+  const cur = Number(document.getElementById("f-cur").value);
+  const qty = Number(document.getElementById("f-qty").value);
+  const sector = document.getElementById("f-sector").value.trim() || "기타";
+  if (!name || !buy || !cur || !qty) return alert("필수 항목(*)을 입력해주세요.");
+  portfolio.push({ id:Date.now(), name, code, buyPrice:buy, currentPrice:cur, qty, sector });
+  ["f-name","f-code","f-buy","f-cur","f-qty","f-sector"].forEach(id => document.getElementById(id).value="");
+  toggleAddForm();
+  renderPortfolio();
+  saveToFirebase();
+}
+
+function removeStock(id) {
+  portfolio = portfolio.filter(p => p.id !== id);
+  renderPortfolio();
+  saveToFirebase();
+}
+
+// ── 네이버 현재가 갱신 ─────────────────────────────────────────────────────
+async function refreshNaverPrices() {
+  const btn = document.getElementById("refreshPriceBtn");
+  const targets = portfolio.filter(p => p.code && p.code.trim());
+  if (!targets.length) {
+    alert("종목코드(6자리)가 입력된 종목이 없습니다.\n수정 버튼으로 종목코드를 먼저 입력해주세요.");
+    return;
+  }
+
+  btn.textContent = "⏳ 갱신 중...";
+  btn.disabled = true;
+
+  try {
+    const codes = targets.map(p => p.code.trim()).join(",");
+    const res = await fetch(`/.netlify/functions/naver-price?codes=${codes}`);
+    if (!res.ok) throw new Error(`서버 오류 (HTTP ${res.status})`);
+    const json = await res.json();
+    if (!json.prices) throw new Error("응답 형식 오류");
+
+    const results = targets.map(p => ({
+      code: p.code,
+      price: json.prices[p.code.trim()] ?? null,
+    }));
+
+    let updated = 0;
+    results.forEach(({ code, price }) => {
+      if (price == null) return;
+      portfolio.forEach(p => {
+        if (p.code?.trim() === code) { p.currentPrice = price; updated++; }
+      });
+    });
+
+    if (updated === 0) throw new Error("갱신된 종목 없음 — 종목코드를 확인해주세요");
+
+    renderPortfolio();
+    saveToFirebase();
+
+    btn.textContent = `✓ ${updated}개 갱신 완료`;
+    btn.style.color = "#22c55e";
+    btn.style.borderColor = "#22c55e44";
+    setTimeout(() => {
+      btn.textContent = "📡 현재가 갱신";
+      btn.disabled = false;
+      btn.style.color = "";
+      btn.style.borderColor = "";
+    }, 3000);
+
+  } catch (e) {
+    btn.textContent = "✗ 갱신 실패";
+    btn.style.color = "#ef4444";
+    btn.style.borderColor = "#ef444444";
+    setTimeout(() => {
+      btn.textContent = "📡 현재가 갱신";
+      btn.disabled = false;
+      btn.style.color = "";
+      btn.style.borderColor = "";
+    }, 3000);
+    console.error("[현재가 갱신]", e.message);
+  }
+}
+
+function renderPortfolio() {
+  renderPortfolioStats();
+  renderPortfolioTable();
+  renderReturnsChart();
+  renderSectorChart();
+}
+
+// ─── 자유게시판 ───
+let boardFormOpen = false;
+let boardFileQueue = []; // 첨부 대기 파일
+
+function toggleBoardForm() {
+  boardFormOpen = !boardFormOpen;
+  document.getElementById("boardForm").style.display = boardFormOpen ? "block" : "none";
+  if (!boardFormOpen) {
+    document.getElementById("bd-author").value = "";
+    document.getElementById("bd-title").value  = "";
+    document.getElementById("bd-content").value = "";
+    document.getElementById("bdFileText").textContent = "📎 파일 첨부";
+    document.getElementById("bdFilePreview").innerHTML = "";
+    document.getElementById("bdFileInput").value = "";
+    boardFileQueue = [];
+  }
+}
+
+function previewBoardFiles() {
+  const input = document.getElementById("bdFileInput");
+  boardFileQueue = Array.from(input.files);
+  const preview = document.getElementById("bdFilePreview");
+  const count = boardFileQueue.length;
+  document.getElementById("bdFileText").textContent = count > 0 ? `📎 ${count}개 선택됨` : "📎 파일 첨부";
+  preview.innerHTML = boardFileQueue.map((f, i) =>
+    `<span style="font-size:11px;padding:3px 10px;background:#1e293b;border-radius:20px;color:#94a3b8;display:flex;align-items:center;gap:5px">
+      ${f.name}
+      <button onclick="removeBoardFileQueue(${i})" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:12px;padding:0;line-height:1">✕</button>
+    </span>`
+  ).join("");
+}
+
+function removeBoardFileQueue(idx) {
+  boardFileQueue.splice(idx, 1);
+  const dt = new DataTransfer();
+  boardFileQueue.forEach(f => dt.items.add(f));
+  document.getElementById("bdFileInput").files = dt.files;
+  previewBoardFiles();
+}
+
+async function submitBoardPost() {
+  const author  = document.getElementById("bd-author").value.trim();
+  const title   = document.getElementById("bd-title").value.trim();
+  const content = document.getElementById("bd-content").value.trim();
+  if (!author) return alert("작성자를 입력해주세요.");
+  if (!title)  return alert("제목을 입력해주세요.");
+
+  const postId = Date.now().toString();
+  const uploadedFiles = [];
+
+  // 파일 업로드 처리
+  for (const file of boardFileQueue) {
+    try {
+      const ext  = file.name.split(".").pop().toLowerCase();
+      const fid  = Date.now().toString() + "_" + Math.random().toString(36).slice(2,6);
+      const ref  = storage.ref(`boardFiles/${postId}/${fid}/${file.name}`);
+      const snap = await ref.put(file);
+      const url  = await snap.ref.getDownloadURL();
+      uploadedFiles.push({ id: fid, name: file.name, url, type: ext, uploadedAt: Date.now() });
+    } catch(e) {
+      console.error("파일 업로드 실패:", e);
+      alert(`"${file.name}" 업로드 실패: ` + e.message);
+    }
+  }
+
+  boardPosts.unshift({ id: postId, author, title, content, createdAt: Date.now(), files: uploadedFiles });
+  toggleBoardForm();
+  saveToFirebase();
+  renderBoard();
+}
+
+function deleteBoardPost(postId) {
+  if (!confirm("이 게시물을 삭제하시겠습니까?")) return;
+  boardPosts = boardPosts.filter(p => p.id !== postId);
+  saveToFirebase();
+  renderBoard();
+}
+
+async function deleteBoardFile(postId, fileId, fileUrl) {
+  if (!confirm("이 파일을 삭제하시겠습니까?")) return;
+  try { await storage.refFromURL(fileUrl).delete(); } catch(e) {}
+  const post = boardPosts.find(p => p.id === postId);
+  if (post) post.files = (post.files || []).filter(f => f.id !== fileId);
+  saveToFirebase();
+  renderBoard();
+}
+
+function toggleBoardBody(postId) {
+  const body = document.getElementById("bd-body-" + postId);
+  const btn  = document.getElementById("bd-toggle-" + postId);
+  if (!body) return;
+  const isOpen = body.style.display !== "none";
+  body.style.display = isOpen ? "none" : "block";
+  btn.textContent = isOpen ? "더보기 ▼" : "접기 ▲";
+}
+
+function renderBoard() {
+  const list = document.getElementById("boardList");
+  if (!list) return;
+  const count = document.getElementById("boardCount");
+  if (count) count.textContent = `(${boardPosts.length}건)`;
+  if (boardPosts.length === 0) {
+    list.innerHTML = '<div class="empty">등록된 게시물이 없습니다.</div>';
+    return;
+  }
+  const docIcon = { pdf:"📄", md:"📝", docx:"📃", doc:"📃", pptx:"📑", xlsx:"📊", png:"🖼", jpg:"🖼", jpeg:"🖼" };
+  list.innerHTML = boardPosts.map(p => {
+    const date    = new Date(p.createdAt).toLocaleDateString("ko-KR", {year:"numeric",month:"long",day:"numeric"});
+    const time    = new Date(p.createdAt).toLocaleTimeString("ko-KR", {hour:"2-digit",minute:"2-digit"});
+    const escaped = (p.content||"").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
+    const files   = p.files || [];
+    const filesHtml = files.length === 0 ? "" : `
+      <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px">
+        ${files.map(f => {
+          const icon = docIcon[f.type] || "📄";
+          return `<div style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:#111827;border:1px solid #1e293b;border-radius:8px">
+            <span>${icon}</span>
+            <span style="font-size:12px;color:#94a3b8">${f.name}</span>
+            <button class="btn btn-primary" style="padding:3px 10px;font-size:11px" onclick="window.open('${f.url}','_blank')">보기</button>
+            <button class="btn btn-ghost" style="padding:3px 8px;font-size:11px;color:#ef4444;border-color:#ef444444" onclick="deleteBoardFile('${p.id}','${f.id}','${f.url}')">삭제</button>
+          </div>`;
+        }).join("")}
+      </div>`;
+    const LIMIT = 36 * 60 * 60 * 1000;
+    const isNew = (Date.now() - p.createdAt) < LIMIT;
+    return `
+      <div style="padding:14px 0;border-bottom:1px solid #1e293b">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <span style="font-size:14px;font-weight:700">${p.title}</span>
+              ${isNew ? '<span style="font-size:10px;font-weight:700;color:#ef4444;background:#ef444418;border:1px solid #ef444444;padding:2px 7px;border-radius:20px">NEW</span>' : ''}
+              ${files.length > 0 ? `<span style="font-size:11px;color:#64748b">📎 ${files.length}</span>` : ''}
+            </div>
+            <div style="font-size:11px;color:#64748b">✍️ ${p.author} · ${date} ${time}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button id="bd-toggle-${p.id}" class="btn btn-ghost" style="padding:3px 9px;font-size:11px" onclick="toggleBoardBody('${p.id}')">더보기 ▼</button>
+            <button class="btn btn-ghost" style="padding:3px 9px;font-size:11px;color:#ef4444;border-color:#ef444444" onclick="deleteBoardPost('${p.id}')">삭제</button>
+          </div>
+        </div>
+        <div id="bd-body-${p.id}" style="display:none;margin-top:12px">
+          <div style="padding:12px;background:#0a0e17;border-radius:8px;font-size:13px;line-height:1.8;color:#94a3b8">${escaped}</div>
+          ${filesHtml}
+        </div>
+      </div>`;
+  }).join("");
+}
+
+// ─── 공지사항 ───
+let noticeFormOpen = false;
+
+function toggleNoticeForm() {
+  noticeFormOpen = !noticeFormOpen;
+  document.getElementById("noticeForm").style.display = noticeFormOpen ? "block" : "none";
+  if (!noticeFormOpen) {
+    ["n-author","n-title","n-content"].forEach(id => document.getElementById(id).value = "");
+  }
+}
+
+function submitNotice() {
+  const author = document.getElementById("n-author").value.trim();
+  const title = document.getElementById("n-title").value.trim();
+  const content = document.getElementById("n-content").value.trim();
+  if (!author) return alert("작성자를 입력해주세요.");
+  if (!title) return alert("제목을 입력해주세요.");
+  if (!content) return alert("내용을 입력해주세요.");
+  announcements.unshift({ id: Date.now().toString(), author, title, content, createdAt: Date.now() });
+  toggleNoticeForm();
+  saveToFirebase();
+  renderNotices();
+}
+
+function deleteNotice(id) {
+  if (!confirm("이 글을 삭제하시겠습니까?")) return;
+  announcements = announcements.filter(a => a.id !== id);
+  saveToFirebase();
+  renderNotices();
+}
+
+function toggleNoticeExpand(id) {
+  const el = document.getElementById("notice-body-" + id);
+  const btn = document.getElementById("notice-toggle-" + id);
+  if (!el || !btn) return;
+  const isHidden = el.style.display === "none";
+  el.style.display = isHidden ? "block" : "none";
+  btn.textContent = isHidden ? "접기 ▲" : "더보기 ▼";
+}
+
+function renderNotices() {
+  const countEl = document.getElementById("noticeCount");
+  if (countEl) countEl.textContent = `(${announcements.length}건)`;
+  const list = document.getElementById("noticeList");
+  if (!list) return;
+  if (announcements.length === 0) {
+    list.innerHTML = '<div class="empty">등록된 공지사항이 없습니다.</div>';
+    return;
+  }
+  list.innerHTML = announcements.map((a, i) => {
+    const date = new Date(a.createdAt).toLocaleDateString("ko-KR", { year:"numeric", month:"long", day:"numeric" });
+    const time = new Date(a.createdAt).toLocaleTimeString("ko-KR", { hour:"2-digit", minute:"2-digit" });
+    const contentEscaped = a.content.replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
+    return `
+      <div style="padding:16px 0;border-bottom:1px solid #1e293b">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
+              <span style="font-size:11px;color:#64748b;font-family:monospace">${String(announcements.length - i).padStart(3,"0")}</span>
+              <span style="font-size:14px;font-weight:700">${a.title}</span>
+            </div>
+            <div style="font-size:11px;color:#64748b">✍️ ${a.author} · ${date} ${time}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button id="notice-toggle-${a.id}" class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="toggleNoticeExpand('${a.id}')">더보기 ▼</button>
+            <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;color:#ef4444;border-color:#ef444444" onclick="deleteNotice('${a.id}')">삭제</button>
+          </div>
+        </div>
+        <div id="notice-body-${a.id}" style="display:none;margin-top:12px;padding:14px;background:#0a0e17;border-radius:8px;font-size:13px;line-height:1.8;color:#94a3b8">${contentEscaped}</div>
+      </div>`;
+  }).join("");
+}
+
+// ─── 기업분석 자료 글쓰기 ───
+function toggleCompanyNoteForm(company) {
+  const form = document.getElementById("noteForm-" + company);
+  if (!form) return;
+  form.style.display = form.style.display === "none" ? "block" : "none";
+}
+
+function submitCompanyNote(company) {
+  const author = document.getElementById("note-author-" + company)?.value.trim();
+  const title = document.getElementById("note-title-" + company)?.value.trim();
+  const content = document.getElementById("note-content-" + company)?.value.trim();
+  if (!author) return alert("작성자를 입력해주세요.");
+  if (!title) return alert("제목을 입력해주세요.");
+  if (!content) return alert("내용을 입력해주세요.");
+  if (!companyNotes[company]) companyNotes[company] = [];
+  companyNotes[company].unshift({ id: Date.now().toString(), author, title, content, createdAt: Date.now() });
+  saveToFirebase();
+  selectCompany(company);
+}
+
+function deleteCompanyNote(company, noteId) {
+  if (!confirm("이 글을 삭제하시겠습니까?")) return;
+  companyNotes[company] = (companyNotes[company] || []).filter(n => n.id !== noteId);
+  saveToFirebase();
+  selectCompany(company);
+}
+
+function toggleNoteBody(id) {
+  const el = document.getElementById("note-body-" + id);
+  const btn = document.getElementById("note-toggle-" + id);
+  if (!el || !btn) return;
+  const hidden = el.style.display === "none";
+  el.style.display = hidden ? "block" : "none";
+  btn.textContent = hidden ? "접기 ▲" : "더보기 ▼";
+}
+
+// ─── 애널리스트 리포트 코멘트 ───
+function toggleReportComments(reportId) {
+  const el = document.getElementById("rc-section-" + reportId);
+  if (!el) return;
+  el.style.display = el.style.display === "none" ? "block" : "none";
+}
+
+function submitReportComment(reportId, company) {
+  const author = document.getElementById("rc-author-" + reportId)?.value.trim();
+  const content = document.getElementById("rc-content-" + reportId)?.value.trim();
+  if (!author) return alert("작성자를 입력해주세요.");
+  if (!content) return alert("코멘트를 입력해주세요.");
+  if (!reportComments[reportId]) reportComments[reportId] = [];
+  reportComments[reportId].push({ id: Date.now().toString(), author, content, createdAt: Date.now() });
+  saveToFirebase();
+  selectCompany(company);
+}
+
+function deleteReportComment(reportId, commentId, company) {
+  if (!confirm("이 코멘트를 삭제하시겠습니까?")) return;
+  reportComments[reportId] = (reportComments[reportId] || []).filter(c => c.id !== commentId);
+  saveToFirebase();
+  selectCompany(company);
+}
+
+// ─── 기업분석 자료 업로드/삭제 ───
+async function uploadCompanyDoc(companyName, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const allowed = ["application/pdf", "text/markdown", "text/plain",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/msword"];
+  const validExt = file.name.match(/\.(pdf|md|docx|doc)$/i);
+  if (!allowed.includes(file.type) && !validExt) return alert("PDF, MD, Word 파일만 업로드 가능합니다.");
+  if (file.size > 30 * 1024 * 1024) return alert("30MB 이하 파일만 업로드 가능합니다.");
+
+  const btnText = document.getElementById("uploadDocBtnText");
+  const btn = document.getElementById("uploadDocBtn");
+  if (btn) btn.style.pointerEvents = "none";
+  if (btnText) btnText.textContent = "⏳ 업로드 중...";
+
+  try {
+    const id = Date.now().toString();
+    const ext = file.name.split(".").pop().toLowerCase();
+    const storageRef = storage.ref(`companyDocs/${companyName}/${id}/${file.name}`);
+    const snapshot = await storageRef.put(file);
+    const url = await snapshot.ref.getDownloadURL();
+    if (!companyDocs[companyName]) companyDocs[companyName] = [];
+    companyDocs[companyName].push({ id, name: file.name, url, uploadedAt: Date.now(), type: ext });
+    saveToFirebase();
+    renderAnalysis();
+  } catch(e) {
+    alert("업로드 실패: " + e.message);
+  }
+  if (btn) btn.style.pointerEvents = "";
+  if (btnText) btnText.textContent = "+ 자료 업로드";
+  input.value = "";
+}
+
+async function deleteCompanyDoc(companyName, docId, url) {
+  if (!confirm("이 자료를 삭제하시겠습니까?")) return;
+  try {
+    const fileRef = storage.refFromURL(url);
+    await fileRef.delete();
+  } catch(e) { console.warn("Storage 삭제 실패:", e); }
+  companyDocs[companyName] = (companyDocs[companyName] || []).filter(d => d.id !== docId);
+  saveToFirebase();
+  renderAnalysis();
+}
+
+// ─── 리포트 업로드/삭제 ───
+async function uploadReport(companyName, input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.type !== "application/pdf") return alert("PDF 파일만 업로드 가능합니다.");
+  if (file.size > 20 * 1024 * 1024) return alert("20MB 이하 파일만 업로드 가능합니다.");
+
+  const uploadBtn = document.getElementById("uploadReportBtn");
+  const uploadBtnText = document.getElementById("uploadReportBtnText");
+  if (uploadBtn) uploadBtn.style.pointerEvents = "none";
+  if (uploadBtnText) uploadBtnText.textContent = "⏳ 업로드 중...";
+
+  try {
+    const id = Date.now().toString();
+    const storageRef = storage.ref(`reports/${companyName}/${id}/${file.name}`);
+    const snapshot = await storageRef.put(file);
+    const url = await snapshot.ref.getDownloadURL();
+    if (!reports[companyName]) reports[companyName] = [];
+    reports[companyName].push({ id, name: file.name, url, uploadedAt: Date.now() });
+    saveToFirebase();
+    renderAnalysis();
+  } catch(e) {
+    alert("업로드 실패: " + e.message);
+  }
+  if (uploadBtn) uploadBtn.style.pointerEvents = "";
+  if (uploadBtnText) uploadBtnText.textContent = "+ 리포트 업로드";
+  input.value = "";
+}
+
+async function deleteReport(companyName, reportId, url) {
+  if (!confirm("이 리포트를 삭제하시겠습니까?")) return;
+  try {
+    const fileRef = storage.refFromURL(url);
+    await fileRef.delete();
+  } catch(e) { console.warn("Storage 삭제 실패:", e); }
+  reports[companyName] = (reports[companyName] || []).filter(r => r.id !== reportId);
+  saveToFirebase();
+  renderAnalysis();
+}
+
+// ─── 발표자료 업로드/삭제/렌더 ───
+async function uploadPresentation(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const allowed = ["application/pdf", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "application/vnd.ms-powerpoint"];
+  if (!allowed.includes(file.type) && !file.name.match(/\.(pdf|pptx|ppt)$/i)) return alert("PDF 또는 PPTX 파일만 업로드 가능합니다.");
+  if (file.size > 50 * 1024 * 1024) return alert("50MB 이하 파일만 업로드 가능합니다.");
+
+  const btn = document.getElementById("uploadPresBtn");
+  const btnText = document.getElementById("uploadPresBtnText");
+  if (btn) btn.style.pointerEvents = "none";
+  if (btnText) btnText.textContent = "⏳ 업로드 중...";
+
+  try {
+    const id = Date.now().toString();
+    const ext = file.name.split(".").pop().toLowerCase();
+    const type = ext === "pdf" ? "pdf" : "pptx";
+    const storageRef = storage.ref(`presentations/${id}/${file.name}`);
+    const snapshot = await storageRef.put(file);
+    const url = await snapshot.ref.getDownloadURL();
+    presentations.push({ id, name: file.name, url, uploadedAt: Date.now(), type });
+    saveToFirebase();
+    renderPresentations();
+  } catch(e) {
+    alert("업로드 실패: " + e.message);
+  }
+  if (btn) btn.style.pointerEvents = "";
+  if (btnText) btnText.textContent = "+ 파일 업로드";
+  input.value = "";
+}
+
+async function deletePresentation(id, url) {
+  if (!confirm("이 파일을 삭제하시겠습니까?")) return;
+  try {
+    const fileRef = storage.refFromURL(url);
+    await fileRef.delete();
+  } catch(e) { console.warn("Storage 삭제 실패:", e); }
+  presentations = presentations.filter(p => p.id !== id);
+  saveToFirebase();
+  renderPresentations();
+}
+
+function renderPresentations() {
+  const count = presentations.length;
+  const countEl = document.getElementById("presCount");
+  if (countEl) countEl.textContent = `(${count}건)`;
+
+  const list = document.getElementById("presentationsList");
+  if (!list) return;
+
+  if (count === 0) {
+    list.innerHTML = '<div class="empty">업로드된 발표자료가 없습니다.</div>';
+    return;
+  }
+
+  list.innerHTML = [...presentations].reverse().map(p => {
+    const icon = p.type === "pdf" ? "📄" : "📊";
+    const date = new Date(p.uploadedAt).toLocaleDateString("ko-KR", { year:"numeric", month:"long", day:"numeric" });
+    const viewBtn = p.type === "pdf"
+      ? `<button class="btn btn-primary" style="padding:5px 14px;font-size:11px" onclick="window.open('${p.url}','_blank')">보기</button>`
+      : `<a class="btn btn-primary" style="padding:5px 14px;font-size:11px;text-decoration:none" href="${p.url}" download="${p.name}">다운로드</a>`;
+    return `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid #1e293b">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="font-size:24px">${icon}</span>
+          <div>
+            <div style="font-size:13px;font-weight:600">${p.name}</div>
+            <div style="font-size:11px;color:#64748b;margin-top:3px">${date} · ${p.type.toUpperCase()}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          ${viewBtn}
+          <button class="btn btn-ghost" style="padding:5px 12px;font-size:11px;color:#ef4444;border-color:#ef444444" onclick="deletePresentation('${p.id}','${p.url}')">삭제</button>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+
+// ─── 연간/분기 실적 ───
+function toggleAnnualForm(company) {
+  const form = document.getElementById("annForm-" + company);
+  if (!form) return;
+  form.style.display = form.style.display === "none" ? "block" : "none";
+}
+function calcAnnMargin() {
+  const rev = parseFloat(document.getElementById("ann-rev")?.value) || 0;
+  const op  = parseFloat(document.getElementById("ann-op")?.value)  || 0;
+  const el  = document.getElementById("ann-margin-preview");
+  if (el) el.textContent = rev > 0 ? ((op/rev)*100).toFixed(1) + "%" : "-";
+}
+function addAnnualData(company) {
+  const year = document.getElementById("ann-year")?.value.trim();
+  const rev  = parseFloat(document.getElementById("ann-rev")?.value);
+  const op   = parseFloat(document.getElementById("ann-op")?.value);
+  const net  = parseFloat(document.getElementById("ann-net")?.value);
+  if (!year) return alert("연도를 입력해주세요.");
+  if (isNaN(rev) || isNaN(op) || isNaN(net)) return alert("모든 수치를 입력해주세요.");
+  if (!annualData[company]) annualData[company] = [];
+  const idx = annualData[company].findIndex(d => d.year === year);
+  if (idx >= 0) {
+    annualData[company][idx] = { ...annualData[company][idx], revenue: rev, opProfit: op, netProfit: net };
+  } else {
+    annualData[company].push({ id: Date.now().toString(), year, revenue: rev, opProfit: op, netProfit: net });
+    annualData[company].sort((a, b) => String(a.year).localeCompare(String(b.year)));
+    if (annualData[company].length > 5) annualData[company] = annualData[company].slice(-5);
+  }
+  saveToFirebase();
+  selectCompany(company);
+}
+function deleteAnnualData(company, id) {
+  if (!confirm("이 데이터를 삭제하시겠습니까?")) return;
+  annualData[company] = (annualData[company] || []).filter(d => d.id !== id);
+  saveToFirebase();
+  selectCompany(company);
+}
+
+function toggleQuarterlyForm(company) {
+  const form = document.getElementById("qtrForm-" + company);
+  if (!form) return;
+  form.style.display = form.style.display === "none" ? "block" : "none";
+}
+function calcQtrMargin() {
+  const rev = parseFloat(document.getElementById("qtr-rev")?.value) || 0;
+  const op  = parseFloat(document.getElementById("qtr-op")?.value)  || 0;
+  const el  = document.getElementById("qtr-margin-preview");
+  if (el) el.textContent = rev > 0 ? ((op/rev)*100).toFixed(1) + "%" : "-";
+}
+function addQuarterlyData(company) {
+  const quarter = document.getElementById("qtr-quarter")?.value.trim();
+  const rev     = parseFloat(document.getElementById("qtr-rev")?.value);
+  const op      = parseFloat(document.getElementById("qtr-op")?.value);
+  const net     = parseFloat(document.getElementById("qtr-net")?.value);
+  if (!quarter) return alert("분기를 입력해주세요. (예: 24Q1)");
+  if (isNaN(rev) || isNaN(op) || isNaN(net)) return alert("모든 수치를 입력해주세요.");
+  if (!quarterlyData[company]) quarterlyData[company] = [];
+  const idx = quarterlyData[company].findIndex(d => d.quarter === quarter);
+  if (idx >= 0) {
+    quarterlyData[company][idx] = { ...quarterlyData[company][idx], revenue: rev, opProfit: op, netProfit: net };
+  } else {
+    quarterlyData[company].push({ id: Date.now().toString(), quarter, revenue: rev, opProfit: op, netProfit: net });
+    if (quarterlyData[company].length > 8) quarterlyData[company] = quarterlyData[company].slice(-8);
+  }
+  saveToFirebase();
+  selectCompany(company);
+}
+function deleteQuarterlyData(company, id) {
+  if (!confirm("이 데이터를 삭제하시겠습니까?")) return;
+  quarterlyData[company] = (quarterlyData[company] || []).filter(d => d.id !== id);
+  saveToFirebase();
+  selectCompany(company);
+}
+
+function renderPerformanceChart(canvasId, chartKey, labels, revenues, opProfits, netProfits, margins) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  if (charts[chartKey]) { charts[chartKey].destroy(); delete charts[chartKey]; }
+  const allVals = revenues.concat(opProfits).concat(netProfits).filter(v => v > 0);
+  const maxVal = allVals.length ? Math.max(...allVals) : 1;
+  const fmtTick = v => {
+    if (maxVal >= 100000) return (v/10000).toFixed(1) + "조";
+    if (maxVal >= 10000)  return (v/1000).toFixed(0) + "천억";
+    return v.toLocaleString();
+  };
+  charts[chartKey] = new Chart(canvas.getContext("2d"), {
+    data: {
+      labels,
+      datasets: [
+        { type:"bar",  label:"매출액",      data:revenues,  backgroundColor:"rgba(59,130,246,0.55)",  borderColor:"#3b82f6", borderWidth:1, yAxisID:"y" },
+        { type:"bar",  label:"영업이익",    data:opProfits,  backgroundColor:"rgba(34,197,94,0.55)",   borderColor:"#22c55e", borderWidth:1, yAxisID:"y" },
+        { type:"bar",  label:"순이익",      data:netProfits, backgroundColor:"rgba(168,85,247,0.55)",  borderColor:"#a855f7", borderWidth:1, yAxisID:"y" },
+        { type:"line", label:"영업이익률(%)", data:margins, borderColor:"#f59e0b", backgroundColor:"rgba(245,158,11,0.1)",
+          borderWidth:2.5, pointRadius:5, pointBackgroundColor:"#f59e0b", tension:0.3, yAxisID:"y2", fill:false }
+      ]
+    },
+    options: {
+      responsive:true,
+      interaction:{ mode:"index", intersect:false },
+      plugins:{
+        legend:{ position:"bottom", labels:{ color:"#64748b", font:{ size:11 }, padding:14, boxWidth:12 } },
+        tooltip:{ callbacks:{ label: ctx =>
+          ctx.dataset.label === "영업이익률(%)"
+            ? "영업이익률: " + ctx.parsed.y.toFixed(1) + "%"
+            : ctx.dataset.label + ": " + fmtTick(ctx.parsed.y)
+        }}
+      },
+      scales:{
+        x:  { grid:{ color:"#1e293b" }, ticks:{ color:"#64748b", font:{ size:11 } } },
+        y:  { grid:{ color:"#1e293b" }, ticks:{ color:"#64748b", font:{ size:11 }, callback:fmtTick }, position:"left" },
+        y2: { grid:{ display:false  }, ticks:{ color:"#f59e0b", font:{ size:11 }, callback: v => v + "%" }, position:"right" }
+      }
+    }
+  });
+}
+
+// ─── Analysis ───
+let showCompanyForm = false;
+
+function toggleAddCompanyForm() {
+  showCompanyForm = !showCompanyForm;
+  document.getElementById("addCompanyForm").style.display = showCompanyForm ? "block" : "none";
+}
+
+function addCompany() {
+  const name = document.getElementById("c-name").value.trim();
+  if (!name) return alert("기업명을 입력해주세요.");
+  if (financials[name]) return alert("이미 존재하는 기업입니다.");
+  financials[name] = { per:0, pbr:0, roe:0, debt:0, rev:[], op:[], years:[], desc:"" };
+  selectedCompany = name;
+  document.getElementById("c-name").value = "";
+  toggleAddCompanyForm();
+  renderAnalysis();
+  saveToFirebase();
+}
+
+function removeCompany(name) {
+  if (!confirm(`"${name}" 기업을 삭제하시겠습니까?`)) return;
+  delete financials[name];
+  const remaining = Object.keys(financials);
+  selectedCompany = remaining.length > 0 ? remaining[0] : null;
+  renderAnalysis();
+  saveToFirebase();
+}
+
+function filterCompanies() {
+  const q = document.getElementById("companySearch").value.toLowerCase();
+  const names = Object.keys(financials).filter(n => !q || n.toLowerCase().includes(q));
+  renderCompanyGrid(names);
+}
+
+function renderCompanyButtons(names) {
+  renderCompanyGrid(names);
+}
+
+function renderCompanyGrid(names) {
+  if (!names) names = Object.keys(financials);
+  const grid = document.getElementById("companyGrid");
+  if (!grid) return;
+  if (names.length === 0) {
+    grid.innerHTML = '<div style="color:#64748b;font-size:13px;padding:8px 0">등록된 기업이 없습니다.</div>';
+    return;
+  }
+  const LIMIT = 36 * 60 * 60 * 1000;
+  const now   = Date.now();
+  const isNew = t => t && (now - t) < LIMIT;
+  grid.innerHTML = names.map(n => {
+    const docCount    = (companyDocs[n]    || []).length;
+    const reportCount = (reports[n]        || []).length;
+    const isActive    = n === selectedCompany;
+    const hasNew =
+      (companyNotes[n] || []).some(x => isNew(x.createdAt))  ||
+      (companyDocs[n]  || []).some(x => isNew(x.uploadedAt)) ||
+      (reports[n]      || []).some(x => isNew(x.uploadedAt));
+    return `
+      <div class="company-card ${isActive ? 'active' : ''}" onclick="selectCompany('${n}')">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div class="company-card-name" style="margin-bottom:0">${n}</div>
+          ${hasNew ? `<span style="font-size:10px;font-weight:700;color:#ef4444;background:#ef444418;border:1px solid #ef444444;padding:2px 7px;border-radius:20px;animation:pulse 2s infinite">NEW</span>` : ''}
+        </div>
+        <div class="company-card-meta">
+          <span>📄 분석자료 ${docCount}건</span>
+          <span>📊 리포트 ${reportCount}건</span>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+function selectCompany(name) {
+  selectedCompany = name;
+  renderCompanyGrid();
+  const d = financials[name];
+  if (!d) return;
+
+  const companyReports = reports[name] || [];
+  const docs  = companyDocs[name] || [];
+  const notes = (companyNotes[name] || []).slice().sort((a,b) => a.createdAt - b.createdAt);
+  const annRecords = annualData[name]    || [];
+  const qtrRecords = quarterlyData[name] || [];
+  const docIcon = { pdf:"📄", md:"📝", docx:"📃", doc:"📃" };
+
+  // ── 글 목록 ──
+  const notesHtml = notes.map(n => {
+    const date    = new Date(n.createdAt).toLocaleDateString("ko-KR", {year:"numeric",month:"long",day:"numeric"});
+    const time    = new Date(n.createdAt).toLocaleTimeString("ko-KR", {hour:"2-digit",minute:"2-digit"});
+    const escaped = n.content.replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
+    return `
+      <div style="padding:12px 0;border-bottom:1px solid #1e293b">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div>
+            <div style="font-size:13px;font-weight:700;margin-bottom:3px">${n.title}</div>
+            <div style="font-size:11px;color:#64748b">✍️ ${n.author} · ${date} ${time}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button id="note-toggle-${n.id}" class="btn btn-ghost" style="padding:3px 9px;font-size:11px" onclick="toggleNoteBody('${n.id}')">더보기 ▼</button>
+            <button class="btn btn-ghost" style="padding:3px 9px;font-size:11px;color:#ef4444;border-color:#ef444444" onclick="deleteCompanyNote('${name}','${n.id}')">삭제</button>
+          </div>
+        </div>
+        <div id="note-body-${n.id}" style="display:none;margin-top:10px;padding:12px;background:#0a0e17;border-radius:8px;font-size:13px;line-height:1.8;color:#94a3b8">${escaped}</div>
+      </div>`;
+  }).join("") || `<div style="padding:16px 0;color:#64748b;font-size:13px;text-align:center">작성된 글이 없습니다.</div>`;
+
+  // ── 파일 목록 ──
+  const docsHtml = docs.map(doc => {
+    const icon = docIcon[doc.type] || "📄";
+    const date = new Date(doc.uploadedAt).toLocaleDateString("ko-KR", {year:"numeric",month:"long",day:"numeric"});
+    return `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #1e293b">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:20px">${icon}</span>
+          <div>
+            <div style="font-size:13px;font-weight:600">${doc.name}</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px">${date} · ${doc.type.toUpperCase()}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" style="padding:5px 14px;font-size:11px" onclick="window.open('${doc.url}','_blank')">보기</button>
+          <button class="btn btn-ghost" style="padding:5px 12px;font-size:11px;color:#ef4444;border-color:#ef444444" onclick="deleteCompanyDoc('${name}','${doc.id}','${doc.url}')">삭제</button>
+        </div>
+      </div>`;
+  }).join("") || `<div style="padding:16px 0;color:#64748b;font-size:13px;text-align:center">업로드된 파일이 없습니다.</div>`;
+
+  // ── 연간 실적 테이블 ──
+  const annTableRows = annRecords.map(rec => {
+    const margin = rec.revenue > 0 ? ((rec.opProfit/rec.revenue)*100).toFixed(1) + "%" : "-";
+    const mColor = rec.opProfit >= 0 ? "#22c55e" : "#ef4444";
+    return `<tr>
+      <td style="font-weight:600">${rec.year}</td>
+      <td>${(rec.revenue||0).toLocaleString()}</td>
+      <td class="${rec.opProfit  >= 0 ? 'green':'red'}">${(rec.opProfit ||0).toLocaleString()}</td>
+      <td class="${rec.netProfit >= 0 ? 'green':'red'}">${(rec.netProfit||0).toLocaleString()}</td>
+      <td style="color:${mColor};font-weight:600">${margin}</td>
+      <td><button class="btn btn-ghost" style="padding:3px 9px;font-size:11px;color:#ef4444;border-color:#ef444444" onclick="deleteAnnualData('${name}','${rec.id}')">삭제</button></td>
+    </tr>`;
+  }).join("");
+
+  const annualBodyHtml = annRecords.length === 0
+    ? `<div style="padding:20px 0;color:#64748b;font-size:13px;text-align:center">입력된 연간 실적 데이터가 없습니다.</div>`
+    : `<canvas id="ann-chart-${name}" height="90" style="margin-bottom:16px"></canvas>
+       <div style="overflow-x:auto"><table>
+         <thead><tr><th>연도</th><th>매출액</th><th>영업이익</th><th>순이익</th><th>영업이익률</th><th></th></tr></thead>
+         <tbody>${annTableRows}</tbody>
+       </table></div>`;
+
+  // ── 분기 실적 테이블 ──
+  const qtrTableRows = qtrRecords.map(rec => {
+    const margin = rec.revenue > 0 ? ((rec.opProfit/rec.revenue)*100).toFixed(1) + "%" : "-";
+    const mColor = rec.opProfit >= 0 ? "#22c55e" : "#ef4444";
+    return `<tr>
+      <td style="font-weight:600">${rec.quarter}</td>
+      <td>${(rec.revenue||0).toLocaleString()}</td>
+      <td class="${rec.opProfit  >= 0 ? 'green':'red'}">${(rec.opProfit ||0).toLocaleString()}</td>
+      <td class="${rec.netProfit >= 0 ? 'green':'red'}">${(rec.netProfit||0).toLocaleString()}</td>
+      <td style="color:${mColor};font-weight:600">${margin}</td>
+      <td><button class="btn btn-ghost" style="padding:3px 9px;font-size:11px;color:#ef4444;border-color:#ef444444" onclick="deleteQuarterlyData('${name}','${rec.id}')">삭제</button></td>
+    </tr>`;
+  }).join("");
+
+  const quarterlyBodyHtml = qtrRecords.length === 0
+    ? `<div style="padding:20px 0;color:#64748b;font-size:13px;text-align:center">입력된 분기 실적 데이터가 없습니다.</div>`
+    : `<canvas id="qtr-chart-${name}" height="90" style="margin-bottom:16px"></canvas>
+       <div style="overflow-x:auto"><table>
+         <thead><tr><th>분기</th><th>매출액</th><th>영업이익</th><th>순이익</th><th>영업이익률</th><th></th></tr></thead>
+         <tbody>${qtrTableRows}</tbody>
+       </table></div>`;
+
+  // ── 리포트 목록 (코멘트 포함) ──
+  const reportsHtml = companyReports.length === 0
+    ? `<div style="padding:20px 0;color:#64748b;font-size:13px;text-align:center">업로드된 리포트가 없습니다.</div>`
+    : companyReports.map(r => {
+        const comments = reportComments[r.id] || [];
+        const commentsHtml = comments.map(c => {
+          const date    = new Date(c.createdAt).toLocaleDateString("ko-KR", {year:"numeric",month:"long",day:"numeric"});
+          const time    = new Date(c.createdAt).toLocaleTimeString("ko-KR", {hour:"2-digit",minute:"2-digit"});
+          const escaped = c.content.replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
+          return `
+            <div style="padding:10px 0;border-bottom:1px solid #1e293b22">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                <div>
+                  <div style="font-size:12px;color:#94a3b8;line-height:1.7">${escaped}</div>
+                  <div style="font-size:11px;color:#475569;margin-top:4px">✍️ ${c.author} · ${date} ${time}</div>
+                </div>
+                <button class="btn btn-ghost" style="padding:2px 8px;font-size:10px;color:#ef4444;border-color:#ef444433;flex-shrink:0;margin-left:8px" onclick="deleteReportComment('${r.id}','${c.id}','${name}')">삭제</button>
+              </div>
+            </div>`;
+        }).join("");
+        return `
+          <div style="padding:14px 0;border-bottom:1px solid #1e293b">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+              <div>
+                <div style="font-size:13px;font-weight:600">📄 ${r.name}</div>
+                <div style="font-size:11px;color:#64748b;margin-top:2px">${new Date(r.uploadedAt).toLocaleDateString("ko-KR",{year:"numeric",month:"long",day:"numeric"})}</div>
+              </div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <button class="btn btn-ghost" style="padding:5px 12px;font-size:11px;color:#94a3b8" onclick="toggleReportComments('${r.id}')">💬 코멘트 ${comments.length}</button>
+                <button class="btn btn-primary" style="padding:5px 14px;font-size:11px" onclick="window.open('${r.url}','_blank')">보기</button>
+                <button class="btn btn-ghost" style="padding:5px 12px;font-size:11px;color:#ef4444;border-color:#ef444444" onclick="deleteReport('${name}','${r.id}','${r.url}')">삭제</button>
+              </div>
+            </div>
+            <div id="rc-section-${r.id}" style="display:none;margin-top:12px;padding:14px;background:#0a0e17;border-radius:8px">
+              ${commentsHtml}
+              <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px">
+                <div style="display:flex;gap:6px">
+                  <input id="rc-author-${r.id}" class="form-input" placeholder="작성자 *" style="width:120px;font-size:12px">
+                </div>
+                <textarea id="rc-content-${r.id}" placeholder="코멘트를 입력하세요..." style="width:100%;height:72px;padding:8px 10px;border-radius:6px;border:1px solid #1e293b;background:#111827;color:#e2e8f0;font-size:12px;font-family:inherit;outline:none;resize:vertical"></textarea>
+                <div>
+                  <button class="btn btn-success" style="padding:5px 16px;font-size:12px" onclick="submitReportComment('${r.id}','${name}')">등록</button>
+                </div>
+              </div>
+            </div>
+          </div>`;
+      }).join("");
+
+  // ── 공통 입력 폼 스타일 ──
+  const formInputStyle = `padding:14px;background:#0a0e17;border-radius:8px;margin-bottom:12px`;
+  const inputRowStyle  = `display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px`;
+  const marginPreviewStyle = `display:flex;align-items:center;gap:6px;padding:7px 12px;background:#111827;border-radius:6px;border:1px solid #1e293b`;
+
+  document.getElementById("analysisContent").innerHTML = `
+    <div class="summary-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+        <div class="summary-name">${name}</div>
+        <button class="btn btn-ghost" style="padding:5px 12px;font-size:11px;border-radius:6px;color:#ef4444;border-color:#ef444444" onclick="removeCompany('${name}')">🗑 기업 삭제</button>
+      </div>
+    </div>
+
+    <!-- ── 기업분석 자료 ── -->
+    <div class="table-card" style="margin-bottom:16px">
+      <div class="table-header">
+        <div class="table-title">기업분석 자료 <span style="color:#64748b;font-weight:400">(글 ${notes.length} · 파일 ${docs.length})</span></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost" style="padding:8px 14px;font-size:12px" onclick="toggleCompanyNoteForm('${name}')">✏️ 글쓰기</button>
+          <label id="uploadDocBtn" class="btn btn-primary" style="padding:8px 14px;font-size:12px;cursor:pointer">
+            <span id="uploadDocBtnText">+ 파일 업로드</span>
+            <input type="file" accept=".pdf,.md,.docx,.doc" style="display:none" onchange="uploadCompanyDoc('${name}', this)">
+          </label>
+        </div>
+      </div>
+      <div id="noteForm-${name}" style="display:none;padding:14px;background:#0a0e17;border-radius:8px;margin-bottom:12px">
+        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <input id="note-author-${name}" class="form-input" placeholder="작성자 *" style="width:130px">
+          <input id="note-title-${name}"  class="form-input" placeholder="제목 *" style="flex:1;min-width:180px">
+        </div>
+        <textarea id="note-content-${name}" placeholder="내용을 입력하세요..." style="width:100%;height:100px;padding:10px 12px;border-radius:6px;border:1px solid #1e293b;background:#111827;color:#e2e8f0;font-size:13px;font-family:inherit;outline:none;resize:vertical;display:block;margin-bottom:8px"></textarea>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-success" style="padding:6px 18px;font-size:12px" onclick="submitCompanyNote('${name}')">등록</button>
+          <button class="btn btn-ghost"   style="padding:6px 12px;font-size:12px" onclick="toggleCompanyNoteForm('${name}')">취소</button>
+        </div>
+      </div>
+      ${docsHtml}
+      ${notes.length > 0 ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #1e293b">${notesHtml}</div>` : notesHtml}
+    </div>
+
+    <!-- ── 애널리스트 리포트 ── -->
+    <div class="table-card" style="margin-bottom:16px">
+      <div class="table-header">
+        <div class="table-title">애널리스트 리포트 <span style="color:#64748b;font-weight:400">(${companyReports.length}건)</span></div>
+        <label id="uploadReportBtn" class="btn btn-primary" style="padding:8px 14px;font-size:12px;cursor:pointer">
+          <span id="uploadReportBtnText">+ 리포트 업로드</span>
+          <input type="file" accept=".pdf" style="display:none" onchange="uploadReport('${name}', this)">
+        </label>
+      </div>
+      ${reportsHtml}
+    </div>
+
+    <!-- ── 최근 5개년 실적 ── -->
+    <div class="table-card" style="margin-bottom:16px">
+      <div class="table-header">
+        <div class="table-title">최근 5개년 실적 <span style="color:#64748b;font-weight:400">(단위: 억원)</span></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-ghost" style="padding:8px 14px;font-size:12px" onclick="toggleAnnualForm('${name}')">+ 직접 입력</button>
+        </div>
+      </div>
+      <div id="annForm-${name}" style="display:none;${formInputStyle}">
+        <div style="${inputRowStyle}">
+          <input id="ann-year" class="form-input" placeholder="연도 (예: 2024)" style="width:160px">
+          <input id="ann-rev"  class="form-input" type="number" placeholder="매출액" style="width:130px" oninput="calcAnnMargin()">
+          <input id="ann-op"   class="form-input" type="number" placeholder="영업이익" style="width:130px" oninput="calcAnnMargin()">
+          <input id="ann-net"  class="form-input" type="number" placeholder="순이익" style="width:130px">
+          <div style="${marginPreviewStyle}">
+            <span style="font-size:12px;color:#64748b">영업이익률</span>
+            <span id="ann-margin-preview" style="font-size:13px;color:#f59e0b;font-weight:700;min-width:44px;text-align:right">-</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-success" style="padding:6px 18px;font-size:12px" onclick="addAnnualData('${name}')">추가</button>
+          <button class="btn btn-ghost"   style="padding:6px 12px;font-size:12px" onclick="toggleAnnualForm('${name}')">취소</button>
+        </div>
+      </div>
+      ${annualBodyHtml}
+    </div>
+
+    <!-- ── 최근 8개 분기 실적 ── -->
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-title">최근 8개 분기 실적 <span style="color:#64748b;font-weight:400">(단위: 억원)</span></div>
+        <button class="btn btn-ghost" style="padding:8px 14px;font-size:12px" onclick="toggleQuarterlyForm('${name}')">+ 데이터 추가</button>
+      </div>
+      <div id="qtrForm-${name}" style="display:none;${formInputStyle}">
+        <div style="${inputRowStyle}">
+          <input id="qtr-quarter" class="form-input" placeholder="분기 (예: 24Q1)" style="width:160px">
+          <input id="qtr-rev"     class="form-input" type="number" placeholder="매출액" style="width:130px" oninput="calcQtrMargin()">
+          <input id="qtr-op"      class="form-input" type="number" placeholder="영업이익" style="width:130px" oninput="calcQtrMargin()">
+          <input id="qtr-net"     class="form-input" type="number" placeholder="순이익" style="width:130px">
+          <div style="${marginPreviewStyle}">
+            <span style="font-size:12px;color:#64748b">영업이익률</span>
+            <span id="qtr-margin-preview" style="font-size:13px;color:#f59e0b;font-weight:700;min-width:44px;text-align:right">-</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-success" style="padding:6px 18px;font-size:12px" onclick="addQuarterlyData('${name}')">추가</button>
+          <button class="btn btn-ghost"   style="padding:6px 12px;font-size:12px" onclick="toggleQuarterlyForm('${name}')">취소</button>
+        </div>
+      </div>
+      ${quarterlyBodyHtml}
+    </div>
+  `;
+
+  // ── 차트 렌더링 (DOM 세팅 후) ──
+  if (annRecords.length > 0) {
+    renderPerformanceChart(
+      "ann-chart-" + name, "annual_" + name,
+      annRecords.map(r => r.year),
+      annRecords.map(r => r.revenue  || 0),
+      annRecords.map(r => r.opProfit  || 0),
+      annRecords.map(r => r.netProfit || 0),
+      annRecords.map(r => r.revenue > 0 ? +((r.opProfit/r.revenue)*100).toFixed(2) : 0)
+    );
+  }
+  if (qtrRecords.length > 0) {
+    renderPerformanceChart(
+      "qtr-chart-" + name, "quarterly_" + name,
+      qtrRecords.map(r => r.quarter),
+      qtrRecords.map(r => r.revenue  || 0),
+      qtrRecords.map(r => r.opProfit  || 0),
+      qtrRecords.map(r => r.netProfit || 0),
+      qtrRecords.map(r => r.revenue > 0 ? +((r.opProfit/r.revenue)*100).toFixed(2) : 0)
+    );
+  }
+}
+
+function renderAnalysis() {
+  renderCompanyGrid();
+  const d = selectedCompany ? financials[selectedCompany] : null;
+  if (!d) {
+    document.getElementById("analysisContent").innerHTML = '<div class="empty">위에서 기업을 선택해주세요.</div>';
+    return;
+  }
+  selectCompany(selectedCompany);
+}
+</script>
+</body>
+</html>
