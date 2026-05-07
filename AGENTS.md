@@ -48,6 +48,8 @@ pnpm lint
 pnpm build
 ```
 
+When an error occurs during development, immediately inspect the failing command output or relevant runtime logs before continuing. Fix the root cause or document the blocker rather than moving on with an unresolved error.
+
 For data or Firebase behavior, manually verify that existing `dashboard` payload fields remain backward compatible. Do not change Firebase paths or Storage paths without a migration plan.
 
 ## Commit & Pull Request Guidelines
