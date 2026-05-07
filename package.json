@@ -26,6 +26,7 @@
     "tailwind-merge": "latest"
   },
   "devDependencies": {
+    "@netlify/plugin-nextjs": "^5.15.10",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
