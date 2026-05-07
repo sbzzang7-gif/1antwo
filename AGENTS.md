@@ -33,6 +33,8 @@ Keep UI styling in Tailwind `className` strings and shared shadcn-style primitiv
 
 Use shadcn semantic tokens (`background`, `foreground`, `card`, `muted`, `accent`, `primary`, `destructive`, `border`, `ring`, `chart-*`) before adding direct Tailwind palettes or hex values. Avoid one-off `#...`, `slate-*`, `emerald-*`, or arbitrary shadow/color utilities unless the design system explicitly introduces them.
 
+Read `DESIGN.md` before changing UI. Map its guidance into `app/globals.css` CSS variables, Tailwind semantic classes, and `components/ui/*` primitives rather than copying brand assets or one-off styles. For this project, use the Binance-inspired tokens as an investment-dashboard vocabulary: near-black canvas, yellow primary actions, flat card surfaces, hairline borders, and trading green/red for market direction.
+
 ## React & Next.js Standards
 
 Follow App Router and React hydration rules. Do not render changing values such as `new Date()`, `Date.now()`, `Math.random()`, locale-formatted dates, or browser-only state during the server/client initial render. Initialize them after mount with `useEffect`, or render a stable placeholder first.

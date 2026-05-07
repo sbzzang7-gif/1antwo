@@ -51,6 +51,13 @@ const config: Config = {
           "4": "hsl(var(--chart-4))",
           "5": "hsl(var(--chart-5))",
         },
+        trading: {
+          up: "hsl(var(--trading-up))",
+          down: "hsl(var(--trading-down))",
+        },
+      },
+      fontFamily: {
+        number: ["var(--font-number)"],
       },
       borderRadius: {
         lg: "var(--radius)",

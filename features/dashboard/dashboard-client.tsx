@@ -75,54 +75,54 @@ const tabItems: Array<{ key: TabKey; href: string; label: string; icon: React.Re
 
 const categoryColors = [
   {
-    dot: "bg-sky-400",
-    badge: "border-sky-400/30 bg-sky-500/10 text-sky-300",
-    row: "hover:bg-sky-500/5",
-    chart: "#38bdf8",
+    dot: "bg-chart-1",
+    badge: "border-chart-1/30 bg-chart-1/10 text-chart-1",
+    row: "hover:bg-chart-1/5",
+    chart: "hsl(var(--chart-1))",
   },
   {
-    dot: "bg-violet-400",
-    badge: "border-violet-400/30 bg-violet-500/10 text-violet-300",
-    row: "hover:bg-violet-500/5",
-    chart: "#a78bfa",
+    dot: "bg-chart-2",
+    badge: "border-chart-2/30 bg-chart-2/10 text-chart-2",
+    row: "hover:bg-chart-2/5",
+    chart: "hsl(var(--chart-2))",
   },
   {
-    dot: "bg-amber-400",
-    badge: "border-amber-400/30 bg-amber-500/10 text-amber-300",
-    row: "hover:bg-amber-500/5",
-    chart: "#fbbf24",
+    dot: "bg-chart-3",
+    badge: "border-chart-3/30 bg-chart-3/10 text-chart-3",
+    row: "hover:bg-chart-3/5",
+    chart: "hsl(var(--chart-3))",
   },
   {
-    dot: "bg-cyan-400",
-    badge: "border-cyan-400/30 bg-cyan-500/10 text-cyan-300",
-    row: "hover:bg-cyan-500/5",
-    chart: "#22d3ee",
+    dot: "bg-chart-4",
+    badge: "border-chart-4/30 bg-chart-4/10 text-chart-4",
+    row: "hover:bg-chart-4/5",
+    chart: "hsl(var(--chart-4))",
   },
   {
-    dot: "bg-lime-400",
-    badge: "border-lime-400/30 bg-lime-500/10 text-lime-300",
-    row: "hover:bg-lime-500/5",
-    chart: "#a3e635",
+    dot: "bg-chart-5",
+    badge: "border-chart-5/30 bg-chart-5/10 text-chart-5",
+    row: "hover:bg-chart-5/5",
+    chart: "hsl(var(--chart-5))",
   },
   {
-    dot: "bg-fuchsia-400",
-    badge: "border-fuchsia-400/30 bg-fuchsia-500/10 text-fuchsia-300",
-    row: "hover:bg-fuchsia-500/5",
-    chart: "#e879f9",
+    dot: "bg-primary",
+    badge: "border-primary/30 bg-primary/10 text-primary",
+    row: "hover:bg-primary/5",
+    chart: "hsl(var(--primary))",
   },
   {
-    dot: "bg-orange-400",
-    badge: "border-orange-400/30 bg-orange-500/10 text-orange-300",
-    row: "hover:bg-orange-500/5",
-    chart: "#fb923c",
+    dot: "bg-muted-foreground",
+    badge: "border-muted-foreground/30 bg-muted/60 text-muted-foreground",
+    row: "hover:bg-muted/40",
+    chart: "hsl(var(--muted-foreground))",
   },
 ];
 const chartColors = categoryColors.map((color) => color.chart);
-const positiveChartColor = "#34d399";
-const revenueChartColor = "#38bdf8";
-const operatingProfitChartColor = "#34d399";
-const netProfitChartColor = "#a78bfa";
-const marginChartColor = "#fbbf24";
+const positiveChartColor = "hsl(var(--trading-up))";
+const revenueChartColor = "hsl(var(--chart-5))";
+const operatingProfitChartColor = "hsl(var(--trading-up))";
+const netProfitChartColor = "hsl(var(--chart-4))";
+const marginChartColor = "hsl(var(--primary))";
 const chartGridColor = "hsl(var(--border))";
 const chartTextColor = "hsl(var(--muted-foreground))";
 const chartTooltipStyle = {
@@ -139,25 +139,25 @@ function getCategoryColor(index: number) {
 function getReturnTone(value: number) {
   if (value > 0) {
     return {
-      text: "text-emerald-400",
-      strongText: "font-semibold text-emerald-300",
-      badge: "border-emerald-400/30 bg-emerald-500/10 text-emerald-300",
-      row: "bg-emerald-500/5",
+      text: "text-trading-up",
+      strongText: "font-number font-semibold tabular-nums text-trading-up",
+      badge: "border-trading-up/30 bg-trading-up/10 text-trading-up",
+      row: "bg-trading-up/5",
     };
   }
 
   if (value < 0) {
     return {
-      text: "text-rose-400",
-      strongText: "font-semibold text-rose-300",
-      badge: "border-rose-400/30 bg-rose-500/10 text-rose-300",
-      row: "bg-rose-500/5",
+      text: "text-trading-down",
+      strongText: "font-number font-semibold tabular-nums text-trading-down",
+      badge: "border-trading-down/30 bg-trading-down/10 text-trading-down",
+      row: "bg-trading-down/5",
     };
   }
 
   return {
     text: "text-muted-foreground",
-    strongText: "font-semibold text-muted-foreground",
+    strongText: "font-number font-semibold tabular-nums text-muted-foreground",
     badge: "border-muted bg-muted text-muted-foreground",
     row: "",
   };
@@ -761,12 +761,12 @@ function PortfolioTab({ data, persist }: { data: DashboardData; persist: (patch:
 }
 
 function StatCard({ label, value, tone }: { label: string; value: string; tone?: "positive" | "negative" }) {
-  const toneClass = tone === "positive" ? "text-emerald-400" : tone === "negative" ? "text-rose-400" : "";
+  const toneClass = tone === "positive" ? "text-trading-up" : tone === "negative" ? "text-trading-down" : "";
 
   return (
     <Card className="p-4">
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className={`mt-1 text-xl font-bold ${toneClass}`}>{value}</div>
+      <div className={`mt-1 font-number text-xl font-bold tabular-nums ${toneClass}`}>{value}</div>
     </Card>
   );
 }
