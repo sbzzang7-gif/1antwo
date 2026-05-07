@@ -23,6 +23,7 @@ import {
   Bell,
   Building2,
   Download,
+  Edit3,
   FileText,
   FolderOpen,
   MessageSquare,
@@ -33,7 +34,6 @@ import {
   Search,
   Trash2,
   Upload,
-  X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { uploadFirebaseFile, deleteFirebaseFile } from "@/hooks/use-firebase-upload";
 import { fmt, newWithin36Hours, pctCalc } from "@/lib/utils";
 import type { StockQuote } from "@/lib/stocks/price-provider";
@@ -288,12 +297,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-card px-4 py-3 md:px-8">
-          <div className="flex items-center gap-3">
+        <header className="border-b bg-card">
+          <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 px-3 py-3 md:px-8">
+            <div className="flex min-w-0 items-center gap-3">
             <Link href="/" className="text-xl font-extrabold">
               <span className="text-primary">잃않투</span> Dashboard
             </Link>
-            <Badge className={connected ? "bg-accent text-primary" : "bg-destructive/10 text-destructive"}>
+            <Badge className={connected ? "hidden bg-accent text-primary sm:inline-flex" : "hidden bg-destructive/10 text-destructive sm:inline-flex"}>
               {connected ? "● 실시간 동기화 중" : "● 오프라인"}
             </Badge>
           </div>
@@ -320,10 +330,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </span>
             <span className="h-2 w-2 animate-pulse rounded-full bg-primary " />
           </div>
+          </div>
         </header>
 
-        <nav className="flex overflow-x-auto border-b bg-card px-2 md:px-8">
-          {tabItems.map((item) => {
+        <nav className="hidden border-b bg-card md:block">
+          <div className="mx-auto flex max-w-[1440px] overflow-x-auto px-8">
+            {tabItems.map((item) => {
             const hasNew = item.key !== "portfolio" && newBadges[item.key];
             const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
             return (
@@ -339,12 +351,35 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 {hasNew && <span className="h-2 w-2 animate-pulse rounded-full bg-destructive " />}
               </Link>
             );
-          })}
+            })}
+          </div>
         </nav>
 
-        <div className="mx-auto max-w-[1400px] px-4 py-5 md:px-8">{children}</div>
+        <div className="mx-auto max-w-[1440px] px-3 pb-24 pt-4 md:px-8 md:py-6">{children}</div>
 
-        <footer className="border-t px-4 py-4 text-center text-xs text-muted-foreground">
+        <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-card/95 backdrop-blur md:hidden">
+          <div className="grid grid-cols-5 px-1 pb-[env(safe-area-inset-bottom)]">
+            {tabItems.map((item) => {
+              const hasNew = item.key !== "portfolio" && newBadges[item.key];
+              const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  className={`relative flex min-h-14 flex-col items-center justify-center gap-1 text-[11px] transition-colors ${
+                    active ? "text-primary" : "text-muted-foreground"
+                  }`}
+                >
+                  {item.icon}
+                  <span className="max-w-full truncate">{item.label}</span>
+                  {hasNew && <span className="absolute right-4 top-2 h-1.5 w-1.5 rounded-full bg-destructive" />}
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+
+        <footer className="hidden border-t px-4 py-4 text-center text-xs text-muted-foreground md:block">
           잃않투 Dashboard · Firebase 실시간 동기화 · 모든 변경사항이 공유됩니다
         </footer>
       </main>
@@ -396,6 +431,61 @@ export function AnalysisCompanyPage({ company }: { company: string }) {
   }
 
   return <CompanyPanel name={name} data={data} persist={persist} />;
+}
+
+function PageHeader({
+  title,
+  description,
+  actions,
+}: {
+  title: string;
+  description?: string;
+  actions?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <div>
+        <h1 className="text-xl font-bold tracking-normal md:text-2xl">{title}</h1>
+        {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
+      </div>
+      {actions && <div className="flex flex-wrap gap-2 md:justify-end">{actions}</div>}
+    </div>
+  );
+}
+
+function SectionCard({
+  title,
+  description,
+  action,
+  children,
+  className,
+}: {
+  title: string;
+  description?: React.ReactNode;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <Card className={className}>
+      <CardHeader className="flex-col items-start justify-between gap-3 space-y-0 p-4 sm:flex-row md:p-6">
+        <div>
+          <CardTitle>{title}</CardTitle>
+          {description && <div className="mt-1 text-sm text-muted-foreground">{description}</div>}
+        </div>
+        {action && <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">{action}</div>}
+      </CardHeader>
+      <CardContent className="p-4 pt-0 md:p-6 md:pt-0">{children}</CardContent>
+    </Card>
+  );
+}
+
+function EmptyState({ children }: { children: React.ReactNode }) {
+  return <div className="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">{children}</div>;
+}
+
+function FormGrid({ children }: { children: React.ReactNode }) {
+  return <div className="grid gap-3 sm:grid-cols-2">{children}</div>;
 }
 
 function PortfolioTab({ data, persist }: { data: DashboardData; persist: (patch: Patch) => Promise<void> }) {
@@ -523,10 +613,28 @@ function PortfolioTab({ data, persist }: { data: DashboardData; persist: (patch:
       },
     }));
     event.currentTarget.reset();
+    setShowReturn(false);
   };
 
   return (
     <div className="space-y-5">
+      <PageHeader
+        title="포트폴리오"
+        description="보유 종목, 월별 수익률, 섹터 배분을 한 화면에서 관리합니다."
+        actions={
+          <>
+            <Button variant="outline" size="sm" onClick={refreshNaverPrices} disabled={refreshing} className="text-muted-foreground">
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+              현재가 갱신
+            </Button>
+            <Button size="sm" onClick={() => setShowAdd(true)}>
+              <Plus className="h-3.5 w-3.5" />
+              종목 추가
+            </Button>
+          </>
+        }
+      />
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="총 평가액" value={`₩${fmt(stats.cur)}`} />
         <StatCard label="총 수익률" value={`${Number(stats.pct) > 0 ? "+" : ""}${stats.pct}%`} tone={Number(stats.pct) >= 0 ? "positive" : "negative"} />
@@ -534,33 +642,8 @@ function PortfolioTab({ data, persist }: { data: DashboardData; persist: (patch:
         <StatCard label="총 투자금" value={`₩${fmt(stats.inv)}`} />
       </div>
 
-      <Card>
-        <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
-          <CardTitle>보유 종목 현황</CardTitle>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={refreshNaverPrices} disabled={refreshing} className="text-muted-foreground">
-              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-              현재가 갱신
-            </Button>
-            <Button size="sm" onClick={() => setShowAdd((value) => !value)}>
-              {showAdd ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-              {showAdd ? "취소" : "종목 추가"}
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {showAdd && (
-            <form onSubmit={addStock} className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-background p-3">
-              <Input name="name" placeholder="종목명 *" className="w-32" />
-              <Input name="code" placeholder="종목코드" className="w-32" />
-              <Input name="buyPrice" type="number" placeholder="매입가 *" className="w-28" />
-              <Input name="currentPrice" type="number" placeholder="현재가 *" className="w-28" />
-              <Input name="qty" type="number" placeholder="수량 *" className="w-24" />
-              <Input name="sector" placeholder="섹터" className="w-28" />
-              <Button size="sm">추가</Button>
-            </form>
-          )}
-          <div className="overflow-x-auto">
+      <SectionCard title="보유 종목 현황" description={`${data.portfolio.length}개 종목`}>
+          <div className="hidden overflow-x-auto md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -647,52 +730,41 @@ function PortfolioTab({ data, persist }: { data: DashboardData; persist: (patch:
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
+          <div className="space-y-3 md:hidden">
+            {data.portfolio.length ? data.portfolio.map((stock, index) => {
+              const evalAmt = stock.currentPrice * stock.qty;
+              const profit = (stock.currentPrice - stock.buyPrice) * stock.qty;
+              const weight = stats.cur > 0 ? ((evalAmt / stats.cur) * 100).toFixed(1) : "0.0";
+              return (
+                <StockMobileCard
+                  key={stock.id}
+                  stock={stock}
+                  categoryColor={getCategoryColor(index)}
+                  evalAmt={evalAmt}
+                  profit={profit}
+                  weight={weight}
+                  editing={editingId === stock.id}
+                  onEdit={() => setEditingId(editingId === stock.id ? null : stock.id)}
+                  onCancel={() => setEditingId(null)}
+                  onUpdate={(form) => updateStock(stock, form)}
+                  onDelete={() => persist((current) => ({ ...current, portfolio: current.portfolio.filter((item) => item.id !== stock.id) }))}
+                />
+              );
+            }) : <EmptyState>등록된 종목이 없습니다.</EmptyState>}
+          </div>
+      </SectionCard>
 
       <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
-        <Card>
-          <CardHeader className="flex-row items-center justify-between space-y-0">
-            <CardTitle>포트폴리오 월별 수익률 추이 <span className="font-normal text-muted-foreground">(26.03~)</span></CardTitle>
-            <Button variant="outline" size="sm" onClick={() => setShowReturn((value) => !value)}>
-              {showReturn ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+        <SectionCard
+          title="포트폴리오 월별 수익률 추이"
+          description="26.03~"
+          action={
+            <Button variant="outline" size="sm" onClick={() => setShowReturn(true)}>
+              <Plus className="h-3.5 w-3.5" />
               월별 수익률
             </Button>
-          </CardHeader>
-          <CardContent>
-            {showReturn && (
-              <form onSubmit={addReturn} className="mb-4 flex flex-wrap gap-2 rounded-lg bg-background p-3">
-                <select name="year" className="h-9 rounded-md border bg-card px-3 text-sm">
-                  <option value="26">2026</option>
-                  <option value="27">2027</option>
-                  <option value="28">2028</option>
-                </select>
-                <select name="month" className="h-9 rounded-md border bg-card px-3 text-sm">
-                  {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
-                    <option key={month} value={String(month).padStart(2, "0")}>{month}월</option>
-                  ))}
-                </select>
-                <Input name="value" type="number" step="0.1" placeholder="수익률 (%)" className="w-32" />
-                <Button size="sm">추가</Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="border-destructive/30 text-destructive"
-                  onClick={() =>
-                    persist((current) => ({
-                      ...current,
-                      returnsData: {
-                        labels: current.returnsData.labels.slice(0, -1),
-                        data: current.returnsData.data.slice(0, -1),
-                      },
-                    }))
-                  }
-                >
-                  마지막 삭제
-                </Button>
-              </form>
-            )}
+          }
+        >
             <div className="h-64">
               {mounted && (
                 <ResponsiveContainer width="100%" height={256} minWidth={0}>
@@ -722,14 +794,9 @@ function PortfolioTab({ data, persist }: { data: DashboardData; persist: (patch:
                 );
               })}
             </div>
-          </CardContent>
-        </Card>
+        </SectionCard>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>섹터별 자산 배분</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <SectionCard title="섹터별 자산 배분">
             <div className="h-72">
               {mounted && (
                 <ResponsiveContainer width="100%" height={288} minWidth={0}>
@@ -753,9 +820,75 @@ function PortfolioTab({ data, persist }: { data: DashboardData; persist: (patch:
                 </ResponsiveContainer>
               )}
             </div>
-          </CardContent>
-        </Card>
+        </SectionCard>
       </div>
+
+      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>종목 추가</DialogTitle>
+            <DialogDescription>종목명, 매입가, 현재가, 수량은 필수입니다.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={addStock} className="space-y-4">
+            <FormGrid>
+              <Input name="name" placeholder="종목명 *" />
+              <Input name="code" placeholder="종목코드" />
+              <Input name="buyPrice" type="number" placeholder="매입가 *" />
+              <Input name="currentPrice" type="number" placeholder="현재가 *" />
+              <Input name="qty" type="number" placeholder="수량 *" />
+              <Input name="sector" placeholder="섹터" />
+            </FormGrid>
+            <DialogFooter>
+              <DialogClose asChild><Button type="button" variant="outline">취소</Button></DialogClose>
+              <Button>추가</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showReturn} onOpenChange={setShowReturn}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>월별 수익률 추가</DialogTitle>
+            <DialogDescription>이미 등록된 월은 중복 저장되지 않습니다.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={addReturn} className="space-y-4">
+            <FormGrid>
+              <select name="year" className="h-10 rounded-md border border-input bg-background px-4 text-sm">
+                <option value="26">2026</option>
+                <option value="27">2027</option>
+                <option value="28">2028</option>
+              </select>
+              <select name="month" className="h-10 rounded-md border border-input bg-background px-4 text-sm">
+                {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
+                  <option key={month} value={String(month).padStart(2, "0")}>{month}월</option>
+                ))}
+              </select>
+              <Input name="value" type="number" step="0.1" placeholder="수익률 (%)" className="sm:col-span-2" />
+            </FormGrid>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                className="border-destructive/30 text-destructive hover:text-destructive sm:mr-auto"
+                onClick={() =>
+                  persist((current) => ({
+                    ...current,
+                    returnsData: {
+                      labels: current.returnsData.labels.slice(0, -1),
+                      data: current.returnsData.data.slice(0, -1),
+                    },
+                  }))
+                }
+              >
+                마지막 삭제
+              </Button>
+              <DialogClose asChild><Button type="button" variant="outline">취소</Button></DialogClose>
+              <Button>추가</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -768,6 +901,108 @@ function StatCard({ label, value, tone }: { label: string; value: string; tone?:
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className={`mt-1 font-number text-xl font-bold tabular-nums ${toneClass}`}>{value}</div>
     </Card>
+  );
+}
+
+function StockMobileCard({
+  stock,
+  categoryColor,
+  evalAmt,
+  profit,
+  weight,
+  editing,
+  onEdit,
+  onCancel,
+  onUpdate,
+  onDelete,
+}: {
+  stock: Stock;
+  categoryColor: ReturnType<typeof getCategoryColor>;
+  evalAmt: number;
+  profit: number;
+  weight: string;
+  editing: boolean;
+  onEdit: () => void;
+  onCancel: () => void;
+  onUpdate: (form: HTMLFormElement) => Promise<void>;
+  onDelete: () => void | Promise<void>;
+}) {
+  const rate = Number(pctCalc(stock.buyPrice, stock.currentPrice));
+  const tone = getReturnTone(profit);
+  const priceTone = getReturnTone(stock.priceChange ?? 0);
+
+  return (
+    <div className="rounded-lg border bg-background p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${categoryColor.dot}`} />
+            <h3 className="truncate font-semibold">{stock.name}</h3>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Badge className={`border ${categoryColor.badge}`}>{stock.sector}</Badge>
+            {stock.code && <Badge className="border-border bg-card text-muted-foreground">{stock.code}</Badge>}
+          </div>
+        </div>
+        <div className="text-right">
+          <div className={tone.strongText}>{rate > 0 ? "+" : ""}{rate.toFixed(1)}%</div>
+          <div className={`mt-1 text-xs ${tone.text}`}>{profit > 0 ? "+" : ""}₩{fmt(profit)}</div>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+        <div>
+          <div className="text-xs text-muted-foreground">현재가</div>
+          <div className="mt-1 font-number font-semibold tabular-nums">₩{fmt(stock.currentPrice)}</div>
+          {stock.priceChange != null && stock.priceChangeRate != null && (
+            <div className={`mt-1 text-xs ${priceTone.text}`}>
+              {formatSignedNumber(stock.priceChange)} ({formatSignedPercent(stock.priceChangeRate)})
+            </div>
+          )}
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">평가액</div>
+          <div className="mt-1 font-number font-semibold tabular-nums">₩{fmt(evalAmt)}</div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">수량</div>
+          <div className="mt-1">{fmt(stock.qty)}주</div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">비중</div>
+          <div className="mt-1">{weight}%</div>
+        </div>
+      </div>
+
+      {editing && (
+        <form
+          className="mt-4 grid gap-2 rounded-lg border bg-card p-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onUpdate(event.currentTarget);
+          }}
+        >
+          <Input name="code" defaultValue={stock.code} placeholder="종목코드" />
+          <div className="grid grid-cols-3 gap-2">
+            <Input name="buyPrice" type="number" defaultValue={stock.buyPrice} />
+            <Input name="currentPrice" type="number" defaultValue={stock.currentPrice} />
+            <Input name="qty" type="number" defaultValue={stock.qty} />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={onCancel}>취소</Button>
+            <Button size="sm">저장</Button>
+          </div>
+        </form>
+      )}
+
+      <div className="mt-4 flex justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={onEdit}>
+          <Edit3 className="h-3.5 w-3.5" />
+          수정
+        </Button>
+        <DeleteConfirm title="종목 삭제" onConfirm={onDelete} />
+      </div>
+    </div>
   );
 }
 
@@ -795,17 +1030,18 @@ function PresentationsTab({ data, persist }: { data: DashboardData; persist: (pa
   };
 
   return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle>발표자료 <span className="font-normal text-muted-foreground">({data.presentations.length}건)</span></CardTitle>
+    <SectionCard
+      title="발표자료"
+      description={`${data.presentations.length}건`}
+      action={
         <label>
           <Button asChild size="sm">
             <span><Upload className="h-3.5 w-3.5" />{uploading ? "업로드 중..." : "파일 업로드"}</span>
           </Button>
           <input className="hidden" type="file" accept=".pdf,.pptx,.ppt" onChange={(event) => upload(event.target.files?.[0])} />
         </label>
-      </CardHeader>
-      <CardContent>
+      }
+    >
         <FileList
           empty="업로드된 발표자료가 없습니다."
           files={[...data.presentations].reverse()}
@@ -814,8 +1050,7 @@ function PresentationsTab({ data, persist }: { data: DashboardData; persist: (pa
             await persist((current) => ({ ...current, presentations: current.presentations.filter((item) => item.id !== file.id) }));
           }}
         />
-      </CardContent>
-    </Card>
+    </SectionCard>
   );
 }
 
@@ -931,47 +1166,35 @@ function PostSection({
   };
 
   return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle>{title} <span className="font-normal text-muted-foreground">({posts.length}건)</span></CardTitle>
-        <Button size="sm" onClick={() => setOpen((value) => !value)}>
-          {open ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+    <>
+    <SectionCard
+      title={title}
+      description={`${posts.length}건`}
+      action={
+        <Button size="sm" onClick={() => setOpen(true)}>
+          <Plus className="h-3.5 w-3.5" />
           글쓰기
         </Button>
-      </CardHeader>
-      <CardContent>
-        {open && (
-          <form onSubmit={submit} className="mb-4 space-y-2 rounded-lg bg-background p-4">
-            <div className="flex flex-wrap gap-2">
-              <Input name="author" placeholder="작성자 *" className="w-36" />
-              <Input name="title" placeholder="제목 *" className="min-w-48 flex-1" />
-            </div>
-            <Textarea name="content" placeholder="내용을 입력하세요..." />
-            {extraForm}
-            <div className="flex gap-2">
-              <Button size="sm">등록</Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>취소</Button>
-            </div>
-          </form>
-        )}
+      }
+    >
         {posts.length === 0 ? (
-          <div className="py-10 text-center text-sm text-muted-foreground">{empty}</div>
+          <EmptyState>{empty}</EmptyState>
         ) : (
           <div className="divide-y">
             {posts.map((post, index) => {
               const isOpen = expanded[post.id];
               return (
                 <article key={post.id} className="py-4">
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-mono text-xs text-muted-foreground">{String(posts.length - index).padStart(3, "0")}</span>
-                        <h3 className="font-semibold">{post.title}</h3>
+                        <h3 className="min-w-0 break-words font-semibold">{post.title}</h3>
                         {newWithin36Hours(post.createdAt) && <Badge className="bg-destructive/10 text-destructive">NEW</Badge>}
                       </div>
                       <div className="mt-1 text-xs text-muted-foreground">작성자 {post.author} · {new Date(post.createdAt).toLocaleString("ko-KR")}</div>
                     </div>
-                    <div className="flex shrink-0 gap-2">
+                    <div className="flex shrink-0 justify-end gap-2">
                       <Button variant="outline" size="sm" onClick={() => setExpanded((current) => ({ ...current, [post.id]: !isOpen }))}>
                         {isOpen ? "접기" : "더보기"}
                       </Button>
@@ -979,7 +1202,7 @@ function PostSection({
                     </div>
                   </div>
                   {isOpen && (
-                    <div className="mt-3 rounded-lg bg-background p-3 text-sm leading-7 text-foreground">
+                    <div className="mt-3 rounded-lg border bg-background p-3 text-sm leading-7 text-foreground">
                       <div className="whitespace-pre-wrap">{post.content}</div>
                       {renderPostExtra?.(post)}
                     </div>
@@ -989,8 +1212,28 @@ function PostSection({
             })}
           </div>
         )}
-      </CardContent>
-    </Card>
+    </SectionCard>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title} 글쓰기</DialogTitle>
+          <DialogDescription>작성자와 제목을 입력해 게시합니다.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-4">
+          <FormGrid>
+            <Input name="author" placeholder="작성자 *" />
+            <Input name="title" placeholder="제목 *" />
+          </FormGrid>
+          <Textarea name="content" placeholder="내용을 입력하세요..." />
+          {extraForm}
+          <DialogFooter>
+            <DialogClose asChild><Button type="button" variant="outline">취소</Button></DialogClose>
+            <Button>등록</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 
@@ -1005,11 +1248,11 @@ function FileList({
   onDelete: (file: UploadedFile) => Promise<void>;
   compact?: boolean;
 }) {
-  if (!files.length) return empty ? <div className="py-10 text-center text-sm text-muted-foreground">{empty}</div> : null;
+  if (!files.length) return empty ? <EmptyState>{empty}</EmptyState> : null;
   return (
     <div className={compact ? "mt-3 flex flex-wrap gap-2" : "divide-y"}>
       {files.map((file) => (
-        <div key={file.id} className={compact ? "flex items-center gap-2 rounded-md border bg-card px-3 py-2" : "flex items-center justify-between gap-3 py-3"}>
+        <div key={file.id} className={compact ? "flex items-center gap-2 rounded-md border bg-card px-3 py-2" : "flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between"}>
           <div className="flex min-w-0 items-center gap-3">
             <FileText className="h-5 w-5 shrink-0 text-primary" />
             <div className="min-w-0">
@@ -1017,7 +1260,7 @@ function FileList({
               <div className="text-xs text-muted-foreground">{new Date(file.uploadedAt).toLocaleDateString("ko-KR")} · {(file.type || "file").toUpperCase()}</div>
             </div>
           </div>
-          <div className="flex shrink-0 gap-2">
+          <div className="flex shrink-0 justify-end gap-2">
             <Button asChild size="sm">
               <a href={file.url} target="_blank" rel="noreferrer">
                 <Download className="h-3.5 w-3.5" />
@@ -1053,25 +1296,19 @@ function AnalysisTab({ data, persist }: { data: DashboardData; persist: (patch: 
 
   return (
     <div className="space-y-5">
-      <Card>
-        <CardContent className="p-5">
+      <PageHeader title="기업분석" description="기업별 분석자료, 리포트, 실적 데이터를 관리합니다." />
+      <SectionCard title="기업 목록" description={`${filtered.length}개 기업`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="relative w-full max-w-sm">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="기업명 검색..." className="pl-9" />
             </div>
-            <Button size="sm" onClick={() => setShowAdd((value) => !value)}>
-              {showAdd ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+            <Button size="sm" onClick={() => setShowAdd(true)}>
+              <Plus className="h-3.5 w-3.5" />
               기업 추가
             </Button>
           </div>
-          {showAdd && (
-            <form onSubmit={addCompany} className="mt-3 flex flex-wrap gap-2 rounded-lg bg-background p-3">
-              <Input name="name" placeholder="기업명 *" className="w-48" />
-              <Button size="sm">추가</Button>
-            </form>
-          )}
-          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
             {filtered.map((name) => {
               const hasNew =
                 (data.companyNotes[name] || []).some((item) => newWithin36Hours(item.createdAt)) ||
@@ -1081,7 +1318,7 @@ function AnalysisTab({ data, persist }: { data: DashboardData; persist: (patch: 
                 <Link
                   key={name}
                   href={`/analysis/${encodeURIComponent(name)}`}
-                  className="rounded-lg border bg-background p-4 text-left transition-colors hover:border-input hover:bg-accent"
+                  className="rounded-lg border bg-background p-4 text-left transition-colors hover:border-input hover:bg-secondary"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="truncate font-bold">{name}</div>
@@ -1095,8 +1332,22 @@ function AnalysisTab({ data, persist }: { data: DashboardData; persist: (patch: 
               );
             })}
           </div>
-        </CardContent>
-      </Card>
+      </SectionCard>
+      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>기업 추가</DialogTitle>
+            <DialogDescription>기업 상세 화면과 기본 실적 저장 공간을 생성합니다.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={addCompany} className="space-y-4">
+            <Input name="name" placeholder="기업명 *" />
+            <DialogFooter>
+              <DialogClose asChild><Button type="button" variant="outline">취소</Button></DialogClose>
+              <Button>추가</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1110,7 +1361,7 @@ function CompanyPanel({ name, data, persist }: { name: string; data: DashboardDa
 
   return (
     <div className="space-y-5">
-      <Card className="p-5">
+      <Card className="p-4 md:p-5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-xl font-bold">{name}</h2>
@@ -1167,28 +1418,20 @@ function CompanyDocs({ name, docs, notes, persist }: { name: string; docs: Uploa
   };
 
   return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle>기업분석 자료 <span className="font-normal text-muted-foreground">(글 {notes.length} · 파일 {docs.length})</span></CardTitle>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setOpen((value) => !value)}><Plus className="h-3.5 w-3.5" />글쓰기</Button>
+    <>
+    <SectionCard
+      title="기업분석 자료"
+      description={`글 ${notes.length} · 파일 ${docs.length}`}
+      action={
+        <>
+          <Button variant="outline" size="sm" onClick={() => setOpen(true)}><Plus className="h-3.5 w-3.5" />글쓰기</Button>
           <label>
             <Button asChild size="sm"><span><Upload className="h-3.5 w-3.5" />파일 업로드</span></Button>
             <input className="hidden" type="file" accept=".pdf,.md,.docx,.doc" onChange={(event) => upload(event.target.files?.[0])} />
           </label>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {open && (
-          <form onSubmit={addNote} className="mb-4 space-y-2 rounded-lg bg-background p-4">
-            <div className="flex gap-2">
-              <Input name="author" placeholder="작성자 *" className="w-36" />
-              <Input name="title" placeholder="제목 *" />
-            </div>
-            <Textarea name="content" placeholder="내용을 입력하세요..." />
-            <Button size="sm">등록</Button>
-          </form>
-        )}
+        </>
+      }
+    >
         <FileList
           files={docs}
           empty="업로드된 파일이 없습니다."
@@ -1200,19 +1443,38 @@ function CompanyDocs({ name, docs, notes, persist }: { name: string; docs: Uploa
         <div className="mt-4 divide-y border-t">
           {notes.length ? notes.map((note) => (
             <article key={note.id} className="py-3">
-              <div className="flex items-start justify-between gap-3">
-                <div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
                   <h3 className="font-semibold">{note.title}</h3>
                   <div className="mt-1 text-xs text-muted-foreground">작성자 {note.author} · {new Date(note.createdAt).toLocaleString("ko-KR")}</div>
                 </div>
                 <DeleteConfirm title="글 삭제" onConfirm={() => persist((current) => ({ ...current, companyNotes: { ...current.companyNotes, [name]: (current.companyNotes[name] || []).filter((item) => item.id !== note.id) } }))} />
               </div>
-              <p className="mt-3 whitespace-pre-wrap rounded-lg bg-background p-3 text-sm leading-7 text-foreground">{note.content}</p>
+              <p className="mt-3 whitespace-pre-wrap rounded-lg border bg-background p-3 text-sm leading-7 text-foreground">{note.content}</p>
             </article>
           )) : <div className="py-6 text-center text-sm text-muted-foreground">작성된 글이 없습니다.</div>}
         </div>
-      </CardContent>
-    </Card>
+    </SectionCard>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>기업 노트 작성</DialogTitle>
+          <DialogDescription>{name} 분석 노트를 작성합니다.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={addNote} className="space-y-4">
+          <FormGrid>
+            <Input name="author" placeholder="작성자 *" />
+            <Input name="title" placeholder="제목 *" />
+          </FormGrid>
+          <Textarea name="content" placeholder="내용을 입력하세요..." />
+          <DialogFooter>
+            <DialogClose asChild><Button type="button" variant="outline">취소</Button></DialogClose>
+            <Button>등록</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 
@@ -1230,15 +1492,16 @@ function CompanyReports({ name, reports, data, persist }: { name: string; report
   };
 
   return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle>애널리스트 리포트 <span className="font-normal text-muted-foreground">({reports.length}건)</span></CardTitle>
+    <SectionCard
+      title="애널리스트 리포트"
+      description={`${reports.length}건`}
+      action={
         <label>
           <Button asChild size="sm"><span><Upload className="h-3.5 w-3.5" />리포트 업로드</span></Button>
           <input className="hidden" type="file" accept=".pdf" onChange={(event) => upload(event.target.files?.[0])} />
         </label>
-      </CardHeader>
-      <CardContent>
+      }
+    >
         <FileList
           files={reports}
           empty="업로드된 리포트가 없습니다."
@@ -1250,8 +1513,7 @@ function CompanyReports({ name, reports, data, persist }: { name: string; report
         {reports.map((report) => (
           <ReportComments key={report.id} report={report} company={name} comments={data.reportComments[report.id] || []} persist={persist} />
         ))}
-      </CardContent>
-    </Card>
+    </SectionCard>
   );
 }
 
@@ -1307,6 +1569,7 @@ function PerformancePanel({
   onDelete: (id: string) => Promise<void>;
 }) {
   const mounted = useMounted();
+  const [open, setOpen] = useState(false);
   const chartData = records.map((record) => ({
     label: record[labelKey],
     revenue: record.revenue || 0,
@@ -1325,21 +1588,16 @@ function PerformancePanel({
     if (!label || Number.isNaN(revenue) || Number.isNaN(opProfit) || Number.isNaN(netProfit)) return window.alert("모든 수치를 입력해주세요.");
     await onAdd({ id: Date.now().toString(), [labelKey]: label, revenue, opProfit, netProfit });
     event.currentTarget.reset();
+    setOpen(false);
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title} <span className="font-normal text-muted-foreground">(단위: 억원)</span></CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={submit} className="mb-4 flex flex-wrap gap-2 rounded-lg bg-background p-3">
-          <Input name="label" placeholder={labelKey === "year" ? "연도 (예: 2024)" : "분기 (예: 24Q1)"} className="w-40" />
-          <Input name="revenue" type="number" placeholder="매출액" className="w-32" />
-          <Input name="opProfit" type="number" placeholder="영업이익" className="w-32" />
-          <Input name="netProfit" type="number" placeholder="순이익" className="w-32" />
-          <Button size="sm">추가</Button>
-        </form>
+    <>
+    <SectionCard
+      title={title}
+      description="단위: 억원"
+      action={<Button size="sm" onClick={() => setOpen(true)}><Plus className="h-3.5 w-3.5" />실적 추가</Button>}
+    >
         {records.length ? (
           <>
             <div className="mb-4 h-64">
@@ -1360,7 +1618,7 @@ function PerformancePanel({
                 </ResponsiveContainer>
               )}
             </div>
-            <div className="overflow-x-auto">
+            <div className="hidden overflow-x-auto md:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1390,12 +1648,78 @@ function PerformancePanel({
                 </TableBody>
               </Table>
             </div>
+            <div className="space-y-3 md:hidden">
+              {records.map((record) => (
+                <PerformanceMobileCard key={record.id} record={record} labelKey={labelKey} onDelete={() => onDelete(record.id)} />
+              ))}
+            </div>
           </>
         ) : (
-          <div className="py-10 text-center text-sm text-muted-foreground">입력된 실적 데이터가 없습니다.</div>
+          <EmptyState>입력된 실적 데이터가 없습니다.</EmptyState>
         )}
-      </CardContent>
-    </Card>
+    </SectionCard>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title} 입력</DialogTitle>
+          <DialogDescription>매출액, 영업이익, 순이익을 억원 단위로 입력합니다.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-4">
+          <FormGrid>
+            <Input name="label" placeholder={labelKey === "year" ? "연도 (예: 2024)" : "분기 (예: 24Q1)"} />
+            <Input name="revenue" type="number" placeholder="매출액" />
+            <Input name="opProfit" type="number" placeholder="영업이익" />
+            <Input name="netProfit" type="number" placeholder="순이익" />
+          </FormGrid>
+          <DialogFooter>
+            <DialogClose asChild><Button type="button" variant="outline">취소</Button></DialogClose>
+            <Button>추가</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+    </>
+  );
+}
+
+function PerformanceMobileCard({
+  record,
+  labelKey,
+  onDelete,
+}: {
+  record: PerformanceRecord;
+  labelKey: "year" | "quarter";
+  onDelete: () => void | Promise<void>;
+}) {
+  const operatingTone = getReturnTone(record.opProfit);
+  const netTone = getReturnTone(record.netProfit);
+  const margin = record.revenue > 0 ? ((record.opProfit / record.revenue) * 100).toFixed(1) : "-";
+
+  return (
+    <div className="rounded-lg border bg-background p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="font-semibold">{record[labelKey]}</h3>
+        <DeleteConfirm title="실적 데이터 삭제" onConfirm={onDelete} />
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+        <div>
+          <div className="text-xs text-muted-foreground">매출액</div>
+          <div className="mt-1 font-number font-semibold tabular-nums">{fmt(record.revenue)}</div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">영업이익률</div>
+          <div className={`mt-1 ${operatingTone.strongText}`}>{margin}%</div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">영업이익</div>
+          <div className={`mt-1 ${operatingTone.text}`}>{fmt(record.opProfit)}</div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">순이익</div>
+          <div className={`mt-1 ${netTone.text}`}>{fmt(record.netProfit)}</div>
+        </div>
+      </div>
+    </div>
   );
 }
 
