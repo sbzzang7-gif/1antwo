@@ -151,7 +151,7 @@ function getReturnTone(value: number) {
       text: "text-trading-up",
       strongText: "font-number font-semibold tabular-nums text-trading-up",
       badge: "border-trading-up/30 bg-trading-up/10 text-trading-up",
-      row: "bg-trading-up/5",
+      row: "",
     };
   }
 
@@ -160,7 +160,7 @@ function getReturnTone(value: number) {
       text: "text-trading-down",
       strongText: "font-number font-semibold tabular-nums text-trading-down",
       badge: "border-trading-down/30 bg-trading-down/10 text-trading-down",
-      row: "bg-trading-down/5",
+      row: "",
     };
   }
 
@@ -289,7 +289,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <DashboardContext.Provider value={dashboard}>
-      <main className="min-h-screen bg-background text-foreground">
+      <main className="flex min-h-screen flex-col bg-background text-foreground">
         {loading && (
           <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background/80">
             <div className="h-10 w-10 animate-spin rounded-full border-2 border-border border-t-primary" />
@@ -355,7 +355,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </div>
         </nav>
 
-        <div className="mx-auto max-w-[1440px] px-3 pb-24 pt-4 md:px-8 md:py-6">{children}</div>
+        <div className="mx-auto w-full max-w-[1440px] px-3 pb-24 pt-4 md:px-8 md:py-6">{children}</div>
 
         <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-card/95 backdrop-blur md:hidden">
           <div className="grid grid-cols-5 px-1 pb-[env(safe-area-inset-bottom)]">
@@ -379,7 +379,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </div>
         </nav>
 
-        <footer className="hidden border-t px-4 py-4 text-center text-xs text-muted-foreground md:block">
+        <footer className="mt-auto hidden border-t px-4 py-4 text-center text-xs text-muted-foreground md:block">
           잃않투 Dashboard · Firebase 실시간 동기화 · 모든 변경사항이 공유됩니다
         </footer>
       </main>
@@ -513,6 +513,10 @@ function PortfolioTab({ data, persist }: { data: DashboardData; persist: (patch:
     label,
     value: data.returnsData.data[index],
   }));
+  const returnValues = returns.map((item) => item.value);
+  const returnsMin = Math.min(0, ...returnValues);
+  const returnsMax = Math.max(0, ...returnValues);
+  const returnsZeroOffset = returnsMax === returnsMin ? 50 : (returnsMax / (returnsMax - returnsMin)) * 100;
 
   const addStock = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -770,16 +774,42 @@ function PortfolioTab({ data, persist }: { data: DashboardData; persist: (patch:
                 <ResponsiveContainer width="100%" height={256} minWidth={0}>
                   <AreaChart data={returns.length ? returns : [{ label: "", value: 0 }]}>
                     <defs>
-                      <linearGradient id="returnsFill" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="5%" stopColor={positiveChartColor} stopOpacity={0.24} />
-                        <stop offset="95%" stopColor={positiveChartColor} stopOpacity={0} />
+                      <linearGradient id="returnsSignedFill" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor={positiveChartColor} stopOpacity={0.2} />
+                        <stop offset={`${returnsZeroOffset}%`} stopColor={positiveChartColor} stopOpacity={0.08} />
+                        <stop offset={`${returnsZeroOffset}%`} stopColor="hsl(var(--trading-down))" stopOpacity={0.08} />
+                        <stop offset="100%" stopColor="hsl(var(--trading-down))" stopOpacity={0.2} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid stroke={chartGridColor} vertical={false} />
                     <XAxis dataKey="label" stroke={chartTextColor} fontSize={11} />
                     <YAxis stroke={chartTextColor} fontSize={11} tickFormatter={(value) => `${value}%`} />
-                    <Tooltip contentStyle={chartTooltipStyle} formatter={(value) => [`${Number(value) > 0 ? "+" : ""}${value}%`, "수익률"]} />
-                    <Area dataKey="value" stroke={positiveChartColor} fill="url(#returnsFill)" strokeWidth={2} isAnimationActive={false} />
+                    <Tooltip
+                      contentStyle={chartTooltipStyle}
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const item = payload[0].payload as { label: string; value: number };
+                        return (
+                          <div className="rounded-lg border border-border bg-popover px-3 py-2 text-sm text-popover-foreground">
+                            <div className="text-xs text-muted-foreground">{item.label}</div>
+                            <div className={item.value >= 0 ? "text-trading-up" : "text-trading-down"}>
+                              {item.value > 0 ? "+" : ""}{item.value}%
+                            </div>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Area
+                      dataKey="value"
+                      stroke={positiveChartColor}
+                      fill="url(#returnsSignedFill)"
+                      fillOpacity={1}
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={false}
+                      isAnimationActive={false}
+                      type="monotone"
+                    />
                   </AreaChart>
                 </ResponsiveContainer>
               )}
@@ -807,11 +837,13 @@ function PortfolioTab({ data, persist }: { data: DashboardData; persist: (patch:
                       nameKey="name"
                       innerRadius={58}
                       outerRadius={92}
-                      paddingAngle={2}
+                      paddingAngle={0}
+                      stroke="none"
+                      strokeWidth={0}
                       isAnimationActive={false}
                     >
                       {sectors.map((entry, index) => (
-                        <Cell key={entry.name} fill={chartColors[index % chartColors.length]} />
+                        <Cell key={entry.name} fill={chartColors[index % chartColors.length]} stroke="none" strokeWidth={0} />
                       ))}
                     </Pie>
                     <Tooltip contentStyle={chartTooltipStyle} formatter={(value) => [`₩${fmt(Number(value))}`, "평가액"]} />

@@ -24,7 +24,7 @@ const DialogContent = ({ className, children, ...props }: DialogPrimitive.Dialog
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
+      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none">
         <X className="h-4 w-4" />
         <span className="sr-only">닫기</span>
       </DialogPrimitive.Close>
