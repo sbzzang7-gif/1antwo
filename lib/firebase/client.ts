@@ -14,9 +14,16 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-export const isFirebaseConfigured = Object.values(firebaseConfig).every(Boolean);
+export const isFirebaseDatabaseConfigured = Boolean(
+  firebaseConfig.apiKey &&
+    firebaseConfig.authDomain &&
+    firebaseConfig.databaseURL &&
+    firebaseConfig.projectId &&
+    firebaseConfig.appId,
+);
+export const isFirebaseStorageConfigured = Boolean(isFirebaseDatabaseConfigured && firebaseConfig.storageBucket);
 
-export const app: FirebaseApp | null = isFirebaseConfigured
+export const app: FirebaseApp | null = isFirebaseDatabaseConfigured
   ? getApps().length
     ? getApp()
     : initializeApp(firebaseConfig)
@@ -24,4 +31,4 @@ export const app: FirebaseApp | null = isFirebaseConfigured
 
 export const db: Database | null = app ? getDatabase(app) : null;
 export const dashboardRef: DatabaseReference | null = db ? ref(db, "dashboard") : null;
-export const storage: FirebaseStorage | null = app ? getStorage(app) : null;
+export const storage: FirebaseStorage | null = app && isFirebaseStorageConfigured ? getStorage(app) : null;

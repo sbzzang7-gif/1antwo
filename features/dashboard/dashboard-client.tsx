@@ -20,6 +20,7 @@ import {
   YAxis,
 } from "recharts";
 import {
+  AlertTriangle,
   Bell,
   Building2,
   Download,
@@ -237,7 +238,7 @@ function useDashboard() {
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const dashboard = useDashboardData();
-  const { data, loading, connected, saveStatus, replaceFromBackup } = dashboard;
+  const { data, loading, connected, error, saveStatus, replaceFromBackup } = dashboard;
   const pathname = usePathname();
   const [clock, setClock] = useState<Date | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
@@ -287,16 +288,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const content = loading ? <DashboardSkeleton /> : error ? <DataErrorPanel error={error} /> : children;
+
   return (
     <DashboardContext.Provider value={dashboard}>
       <main className="flex min-h-screen flex-col bg-background text-foreground">
-        {loading && (
-          <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background/80">
-            <div className="h-10 w-10 animate-spin rounded-full border-2 border-border border-t-primary" />
-            <p className="text-sm text-muted-foreground">Firebase에 연결 중...</p>
-          </div>
-        )}
-
         <header className="border-b bg-card">
           <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 px-3 py-3 md:px-8">
             <div className="flex min-w-0 items-center gap-3">
@@ -308,11 +304,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </Badge>
           </div>
           <div className="hidden items-center gap-2 md:flex">
-            <Button variant="outline" size="sm" onClick={exportData}>
+            <Button variant="outline" size="sm" onClick={exportData} disabled={loading || Boolean(error)}>
               <Save className="h-3.5 w-3.5" />
               백업
             </Button>
-            <Button variant="outline" size="sm" onClick={() => importRef.current?.click()}>
+            <Button variant="outline" size="sm" onClick={() => importRef.current?.click()} disabled={loading || Boolean(error)}>
               <Upload className="h-3.5 w-3.5" />
               복원
             </Button>
@@ -355,7 +351,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </div>
         </nav>
 
-        <div className="mx-auto w-full max-w-[1440px] px-3 pb-24 pt-4 md:px-8 md:py-6">{children}</div>
+        <div className="mx-auto w-full max-w-[1440px] px-3 pb-24 pt-4 md:px-8 md:py-6">{content}</div>
 
         <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-card/95 backdrop-blur md:hidden">
           <div className="grid grid-cols-5 px-1 pb-[env(safe-area-inset-bottom)]">
@@ -482,6 +478,79 @@ function SectionCard({
 
 function EmptyState({ children }: { children: React.ReactNode }) {
   return <div className="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">{children}</div>;
+}
+
+function SkeletonBlock({ className = "" }: { className?: string }) {
+  return <div className={`animate-pulse rounded-md bg-muted ${className}`} />;
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+        <div className="space-y-3">
+          <SkeletonBlock className="h-8 w-40" />
+          <SkeletonBlock className="h-4 w-72 max-w-full" />
+        </div>
+        <div className="flex gap-2">
+          <SkeletonBlock className="h-9 w-28" />
+          <SkeletonBlock className="h-9 w-24" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {Array.from({ length: 4 }, (_, index) => (
+          <Card key={index} className="p-4">
+            <SkeletonBlock className="h-3 w-20" />
+            <SkeletonBlock className="mt-3 h-7 w-28" />
+          </Card>
+        ))}
+      </div>
+
+      <Card>
+        <CardHeader className="p-4 md:p-6">
+          <SkeletonBlock className="h-5 w-32" />
+          <SkeletonBlock className="mt-2 h-4 w-20" />
+        </CardHeader>
+        <CardContent className="space-y-3 p-4 pt-0 md:p-6 md:pt-0">
+          {Array.from({ length: 6 }, (_, index) => (
+            <SkeletonBlock key={index} className="h-12 w-full" />
+          ))}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
+        <Card className="p-4 md:p-6">
+          <SkeletonBlock className="h-5 w-48" />
+          <SkeletonBlock className="mt-6 h-64 w-full" />
+        </Card>
+        <Card className="p-4 md:p-6">
+          <SkeletonBlock className="h-5 w-36" />
+          <SkeletonBlock className="mx-auto mt-8 h-48 w-48 rounded-full" />
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function DataErrorPanel({ error }: { error: string }) {
+  return (
+    <Card className="border-destructive/30">
+      <CardContent className="flex flex-col items-center gap-4 px-6 py-14 text-center">
+        <div className="rounded-full border border-destructive/30 bg-destructive/10 p-3 text-destructive">
+          <AlertTriangle className="h-6 w-6" />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold">데이터를 불러오지 못했습니다</h2>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">{error}</p>
+        </div>
+        <div className="rounded-lg border bg-background px-4 py-3 text-left text-xs leading-6 text-muted-foreground">
+          <div>`.env.local`의 `NEXT_PUBLIC_FIREBASE_DATABASE_URL` 값을 확인한 뒤 개발 서버를 재시작하세요.</div>
+          <div>Realtime Database 읽기 권한과 네트워크 연결도 함께 확인해야 합니다.</div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 function FormGrid({ children }: { children: React.ReactNode }) {
