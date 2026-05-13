@@ -2,13 +2,14 @@
 
 import { onValue, ref as dbRef, set } from "firebase/database";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { dashboardRef, db } from "@/lib/firebase/client";
+import { dashboardRef, db, isFirebaseConfigured } from "@/lib/firebase/client";
 import { DEFAULT_DATA } from "@/lib/dashboard/default-data";
 import type { DashboardData } from "@/types/dashboard";
 
 const normalize = (data: Partial<DashboardData> | null): DashboardData => ({
   ...DEFAULT_DATA,
   ...data,
+  tradeJournal: data?.tradeJournal || [],
   returnsData: data?.returnsData || { labels: [], data: [] },
   companyDocs: data?.companyDocs || {},
   companyNotes: data?.companyNotes || {},
@@ -23,18 +24,21 @@ const normalize = (data: Partial<DashboardData> | null): DashboardData => ({
 
 export function useDashboardData() {
   const [data, setDataState] = useState<DashboardData>(DEFAULT_DATA);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(isFirebaseConfigured);
   const [connected, setConnected] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
   const remoteUpdateRef = useRef(false);
 
   useEffect(() => {
+    if (!dashboardRef) return;
+    const activeDashboardRef = dashboardRef;
+
     const unsubscribe = onValue(
-      dashboardRef,
+      activeDashboardRef,
       (snapshot) => {
         const value = snapshot.val() as DashboardData | null;
         if (!value) {
-          set(dashboardRef, { ...DEFAULT_DATA, updatedAt: Date.now() });
+          set(activeDashboardRef, { ...DEFAULT_DATA, updatedAt: Date.now() });
           return;
         }
         remoteUpdateRef.current = true;
@@ -50,6 +54,8 @@ export function useDashboardData() {
   }, []);
 
   useEffect(() => {
+    if (!db) return;
+
     return onValue(dbRef(db, ".info/connected"), (snapshot) => {
       setConnected(Boolean(snapshot.val()));
     });
@@ -60,9 +66,12 @@ export function useDashboardData() {
     setDataState((current) => {
       return typeof next === "function" ? next(current) : next;
     });
-    if (!remoteUpdateRef.current) {
+    if (isFirebaseConfigured && dashboardRef && !remoteUpdateRef.current) {
       await set(dashboardRef, { ...resolved, updatedAt: Date.now() });
       setSaveStatus("동기화됨");
+      window.setTimeout(() => setSaveStatus(""), 2000);
+    } else if (!isFirebaseConfigured) {
+      setSaveStatus("로컬 모드");
       window.setTimeout(() => setSaveStatus(""), 2000);
     }
   }, [data]);

@@ -8,6 +8,7 @@ export const DEFAULT_DATA: DashboardData = {
     { id: 4, name: "카카오", code: "035720", buyPrice: 55000, currentPrice: 48000, qty: 50, sector: "IT" },
     { id: 5, name: "현대차", code: "005380", buyPrice: 230000, currentPrice: 255000, qty: 15, sector: "자동차" },
   ],
+  tradeJournal: [],
   returnsData: { labels: [], data: [] },
   financials: {
     삼성전자: {

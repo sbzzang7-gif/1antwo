@@ -64,7 +64,7 @@ import {
 import { uploadFirebaseFile, deleteFirebaseFile } from "@/hooks/use-firebase-upload";
 import { fmt, newWithin36Hours, pctCalc } from "@/lib/utils";
 import type { StockQuote } from "@/lib/stocks/price-provider";
-import type { BoardPost, DashboardData, PerformanceRecord, Stock, TextPost, UploadedFile } from "@/types/dashboard";
+import type { BoardPost, DashboardData, PerformanceRecord, Stock, TextPost, TradeJournalEntry, UploadedFile } from "@/types/dashboard";
 import { useDashboardData } from "@/features/dashboard/use-dashboard-data";
 
 type TabKey = "portfolio" | "analysis" | "presentations" | "notice" | "board";
@@ -490,8 +490,11 @@ function FormGrid({ children }: { children: React.ReactNode }) {
 
 function PortfolioTab({ data, persist }: { data: DashboardData; persist: (patch: Patch) => Promise<void> }) {
   const mounted = useMounted();
+  const [activePortfolioSection, setActivePortfolioSection] = useState<"charts" | "journal">("charts");
   const [showAdd, setShowAdd] = useState(false);
   const [showReturn, setShowReturn] = useState(false);
+  const [showJournalForm, setShowJournalForm] = useState(false);
+  const [editingJournalEntry, setEditingJournalEntry] = useState<TradeJournalEntry | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -619,6 +622,74 @@ function PortfolioTab({ data, persist }: { data: DashboardData; persist: (patch:
     event.currentTarget.reset();
     setShowReturn(false);
   };
+
+  const openJournalForm = (entry?: TradeJournalEntry) => {
+    setEditingJournalEntry(entry || null);
+    setShowJournalForm(true);
+  };
+
+  const saveJournalEntry = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const tradeDate = String(form.get("tradeDate") || "").trim();
+    const stockName = String(form.get("stockName") || "").trim();
+    const buyPrice = Number(form.get("buyPrice"));
+    const quantity = Number(form.get("quantity"));
+    const finalSellPrice = Number(form.get("finalSellPrice"));
+    const buyReason = String(form.get("buyReason") || "").trim();
+    const sellReason = String(form.get("sellReason") || "").trim();
+
+    if (!tradeDate || !stockName || !buyPrice || !quantity || !finalSellPrice || !buyReason || !sellReason) {
+      return window.alert("필수 항목을 모두 입력해주세요.");
+    }
+
+    const now = Date.now();
+    await persist((current) => {
+      if (editingJournalEntry) {
+        return {
+          ...current,
+          tradeJournal: current.tradeJournal.map((entry) =>
+            entry.id === editingJournalEntry.id
+              ? {
+                  ...entry,
+                  tradeDate,
+                  stockName,
+                  buyPrice,
+                  quantity,
+                  finalSellPrice,
+                  buyReason,
+                  sellReason,
+                  updatedAt: now,
+                }
+              : entry,
+          ),
+        };
+      }
+
+      return {
+        ...current,
+        tradeJournal: [
+          {
+            id: now,
+            tradeDate,
+            stockName,
+            buyPrice,
+            quantity,
+            finalSellPrice,
+            buyReason,
+            sellReason,
+            createdAt: now,
+          },
+          ...current.tradeJournal,
+        ],
+      };
+    });
+    event.currentTarget.reset();
+    setEditingJournalEntry(null);
+    setShowJournalForm(false);
+  };
+
+  const sortedJournalEntries = [...data.tradeJournal].sort((a, b) => b.tradeDate.localeCompare(a.tradeDate) || b.createdAt - a.createdAt);
 
   return (
     <div className="space-y-5">
@@ -758,6 +829,28 @@ function PortfolioTab({ data, persist }: { data: DashboardData; persist: (patch:
           </div>
       </SectionCard>
 
+      <div className="flex w-full rounded-lg border bg-card p-1 sm:w-fit">
+        <Button
+          type="button"
+          variant={activePortfolioSection === "charts" ? "default" : "ghost"}
+          size="sm"
+          onClick={() => setActivePortfolioSection("charts")}
+          className="flex-1 sm:flex-none"
+        >
+          차트
+        </Button>
+        <Button
+          type="button"
+          variant={activePortfolioSection === "journal" ? "default" : "ghost"}
+          size="sm"
+          onClick={() => setActivePortfolioSection("journal")}
+          className="flex-1 sm:flex-none"
+        >
+          매매일지
+        </Button>
+      </div>
+
+      {activePortfolioSection === "charts" ? (
       <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
         <SectionCard
           title="포트폴리오 월별 수익률 추이"
@@ -854,6 +947,80 @@ function PortfolioTab({ data, persist }: { data: DashboardData; persist: (patch:
             </div>
         </SectionCard>
       </div>
+      ) : (
+        <SectionCard
+          title="매매일지"
+          description={`${data.tradeJournal.length}개 기록`}
+          action={
+            <Button size="sm" onClick={() => openJournalForm()}>
+              <Plus className="h-3.5 w-3.5" />
+              매매일지 추가
+            </Button>
+          }
+        >
+          <div className="hidden overflow-x-auto md:block">
+            {sortedJournalEntries.length ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>매매일</TableHead>
+                    <TableHead>종목명</TableHead>
+                    <TableHead>매입가</TableHead>
+                    <TableHead>수량</TableHead>
+                    <TableHead>최종매도가</TableHead>
+                    <TableHead>최종수익률</TableHead>
+                    <TableHead className="min-w-48">매수 근거</TableHead>
+                    <TableHead className="min-w-48">매도 근거</TableHead>
+                    <TableHead />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sortedJournalEntries.map((entry) => {
+                    const finalReturnRate = entry.buyPrice > 0 ? ((entry.finalSellPrice - entry.buyPrice) / entry.buyPrice) * 100 : 0;
+                    const tone = getReturnTone(finalReturnRate);
+                    return (
+                      <TableRow key={entry.id}>
+                        <TableCell className="whitespace-nowrap text-muted-foreground">{entry.tradeDate}</TableCell>
+                        <TableCell className="font-semibold">{entry.stockName}</TableCell>
+                        <TableCell className="font-number tabular-nums">₩{fmt(entry.buyPrice)}</TableCell>
+                        <TableCell className="font-number tabular-nums">{fmt(entry.quantity)}주</TableCell>
+                        <TableCell className="font-number tabular-nums">₩{fmt(entry.finalSellPrice)}</TableCell>
+                        <TableCell className={tone.strongText}>{formatSignedPercent(finalReturnRate)}</TableCell>
+                        <TableCell className="max-w-64 whitespace-normal break-words text-sm text-muted-foreground">{entry.buyReason}</TableCell>
+                        <TableCell className="max-w-64 whitespace-normal break-words text-sm text-muted-foreground">{entry.sellReason}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={() => openJournalForm(entry)}>
+                              <Edit3 className="h-3.5 w-3.5" />
+                              수정
+                            </Button>
+                            <DeleteConfirm
+                              title="매매일지 삭제"
+                              onConfirm={() => persist((current) => ({ ...current, tradeJournal: current.tradeJournal.filter((item) => item.id !== entry.id) }))}
+                            />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            ) : (
+              <EmptyState>등록된 매매일지가 없습니다.</EmptyState>
+            )}
+          </div>
+          <div className="space-y-3 md:hidden">
+            {sortedJournalEntries.length ? sortedJournalEntries.map((entry) => (
+              <TradeJournalMobileCard
+                key={entry.id}
+                entry={entry}
+                onEdit={() => openJournalForm(entry)}
+                onDelete={() => persist((current) => ({ ...current, tradeJournal: current.tradeJournal.filter((item) => item.id !== entry.id) }))}
+              />
+            )) : <EmptyState>등록된 매매일지가 없습니다.</EmptyState>}
+          </div>
+        </SectionCard>
+      )}
 
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent>
@@ -917,6 +1084,47 @@ function PortfolioTab({ data, persist }: { data: DashboardData; persist: (patch:
               </Button>
               <DialogClose asChild><Button type="button" variant="outline">취소</Button></DialogClose>
               <Button>추가</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={showJournalForm}
+        onOpenChange={(open) => {
+          setShowJournalForm(open);
+          if (!open) setEditingJournalEntry(null);
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingJournalEntry ? "매매일지 수정" : "매매일지 추가"}</DialogTitle>
+            <DialogDescription>매매일, 종목명, 가격, 수량, 매수/매도 근거를 입력합니다.</DialogDescription>
+          </DialogHeader>
+          <form key={editingJournalEntry?.id || "new"} onSubmit={saveJournalEntry} className="space-y-4">
+            <FormGrid>
+              <Input name="tradeDate" type="date" defaultValue={editingJournalEntry?.tradeDate} required />
+              <Input name="stockName" placeholder="종목명 *" defaultValue={editingJournalEntry?.stockName} required />
+              <Input name="buyPrice" type="number" min="0" step="1" placeholder="매입가 *" defaultValue={editingJournalEntry?.buyPrice} required />
+              <Input name="quantity" type="number" min="0" step="1" placeholder="수량 *" defaultValue={editingJournalEntry?.quantity} required />
+              <Input
+                name="finalSellPrice"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="최종매도가 *"
+                defaultValue={editingJournalEntry?.finalSellPrice}
+                required
+                className="sm:col-span-2"
+              />
+            </FormGrid>
+            <div className="grid gap-3">
+              <Textarea name="buyReason" placeholder="매수 근거 *" defaultValue={editingJournalEntry?.buyReason} required />
+              <Textarea name="sellReason" placeholder="매도 근거 *" defaultValue={editingJournalEntry?.sellReason} required />
+            </div>
+            <DialogFooter>
+              <DialogClose asChild><Button type="button" variant="outline">취소</Button></DialogClose>
+              <Button>{editingJournalEntry ? "저장" : "추가"}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -1033,6 +1241,65 @@ function StockMobileCard({
           수정
         </Button>
         <DeleteConfirm title="종목 삭제" onConfirm={onDelete} />
+      </div>
+    </div>
+  );
+}
+
+function TradeJournalMobileCard({
+  entry,
+  onEdit,
+  onDelete,
+}: {
+  entry: TradeJournalEntry;
+  onEdit: () => void;
+  onDelete: () => void | Promise<void>;
+}) {
+  const finalReturnRate = entry.buyPrice > 0 ? ((entry.finalSellPrice - entry.buyPrice) / entry.buyPrice) * 100 : 0;
+  const tone = getReturnTone(finalReturnRate);
+
+  return (
+    <div className="rounded-lg border bg-background p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-xs text-muted-foreground">{entry.tradeDate}</div>
+          <h3 className="mt-1 truncate font-semibold">{entry.stockName}</h3>
+        </div>
+        <div className={`shrink-0 text-right ${tone.strongText}`}>{formatSignedPercent(finalReturnRate)}</div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
+        <div>
+          <div className="text-xs text-muted-foreground">매입가</div>
+          <div className="mt-1 font-number font-semibold tabular-nums">₩{fmt(entry.buyPrice)}</div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">수량</div>
+          <div className="mt-1 font-number font-semibold tabular-nums">{fmt(entry.quantity)}주</div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">최종매도가</div>
+          <div className="mt-1 font-number font-semibold tabular-nums">₩{fmt(entry.finalSellPrice)}</div>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-3 text-sm">
+        <div>
+          <div className="text-xs text-muted-foreground">매수 근거</div>
+          <p className="mt-1 break-words leading-6">{entry.buyReason}</p>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">매도 근거</div>
+          <p className="mt-1 break-words leading-6">{entry.sellReason}</p>
+        </div>
+      </div>
+
+      <div className="mt-4 flex justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={onEdit}>
+          <Edit3 className="h-3.5 w-3.5" />
+          수정
+        </Button>
+        <DeleteConfirm title="매매일지 삭제" onConfirm={onDelete} />
       </div>
     </div>
   );

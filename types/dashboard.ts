@@ -66,8 +66,22 @@ export type PerformanceRecord = {
   netProfit: number;
 };
 
+export type TradeJournalEntry = {
+  id: number;
+  tradeDate: string;
+  stockName: string;
+  buyPrice: number;
+  quantity: number;
+  finalSellPrice: number;
+  buyReason: string;
+  sellReason: string;
+  createdAt: number;
+  updatedAt?: number;
+};
+
 export type DashboardData = {
   portfolio: Stock[];
+  tradeJournal: TradeJournalEntry[];
   returnsData: ReturnsData;
   financials: Record<string, Financial>;
   companyDocs: Record<string, UploadedFile[]>;
