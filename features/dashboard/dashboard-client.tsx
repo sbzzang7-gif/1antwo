@@ -188,18 +188,20 @@ function BarIcon() {
 function DeleteConfirm({
   title,
   description = "삭제 후에는 되돌릴 수 없습니다.",
+  triggerLabel = "삭제",
   onConfirm,
 }: {
   title: string;
   description?: string;
+  triggerLabel?: string;
   onConfirm: () => void | Promise<void>;
 }) {
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="outline" size="sm" className="border-destructive/30 text-destructive hover:text-destructive">
+        <Button type="button" variant="outline" size="sm" className="border-destructive/30 text-destructive hover:text-destructive">
           <Trash2 className="h-3.5 w-3.5" />
-          삭제
+          {triggerLabel}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
@@ -1135,11 +1137,12 @@ function PortfolioTab({ data, persist }: { data: DashboardData; persist: (patch:
               <Input name="value" type="number" step="0.1" placeholder="수익률 (%)" className="sm:col-span-2" />
             </FormGrid>
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                className="border-destructive/30 text-destructive hover:text-destructive sm:mr-auto"
-                onClick={() =>
+              <div className="sm:mr-auto">
+                <DeleteConfirm
+                  title="월별 수익률 삭제"
+                  description="가장 마지막 월별 수익률 데이터를 삭제합니다."
+                  triggerLabel="마지막 삭제"
+                  onConfirm={() =>
                   persist((current) => ({
                     ...current,
                     returnsData: {
@@ -1147,10 +1150,9 @@ function PortfolioTab({ data, persist }: { data: DashboardData; persist: (patch:
                       data: current.returnsData.data.slice(0, -1),
                     },
                   }))
-                }
-              >
-                마지막 삭제
-              </Button>
+                  }
+                />
+              </div>
               <DialogClose asChild><Button type="button" variant="outline">취소</Button></DialogClose>
               <Button>추가</Button>
             </DialogFooter>
